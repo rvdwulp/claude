@@ -340,8 +340,6 @@ function toggleMasterAfgerond(taakId, event) {
 
 function verwijderTaak(taakId, event) {
   event.stopPropagation();
-  if (!confirm('Taak verwijderen? De taak blijft zichtbaar in het archief.')) return;
-  // Soft-delete: markeer als verwijderd zodat archief het kan tonen
   taken = taken.map(t => t.id !== taakId ? t :
     { ...t, verwijderd: true, verwijderdDatum: vandaagStr() }
   );
@@ -511,8 +509,14 @@ function slaModalOp() {
     taken = taken.map(t => t.id === bewerkTaakId ? taak : t);
   } else {
     taken.push(taak);
+    // Als geopend vanuit de dag-tab: meteen toevoegen aan die dag
+    if (voegToeAanDagNaSave) {
+      if (!dagPlanning[huidigeDag]) dagPlanning[huidigeDag] = {};
+      dagPlanning[huidigeDag][taak.id] = { gedaan: false, overgenomen: false };
+    }
   }
 
+  voegToeAanDagNaSave = false;
   sluitModal();
   slaData();
   renderAlles();
@@ -521,6 +525,7 @@ function slaModalOp() {
 function sluitModal() {
   document.getElementById('modal-overlay').classList.add('hidden');
   bewerkTaakId = null;
+  voegToeAanDagNaSave = false;
 }
 
 // ===== SELECTEER TAKEN VOOR DAG =====
@@ -582,31 +587,25 @@ function voegGeselecteerdeToe() {
   document.getElementById('select-modal-overlay').classList.add('hidden');
 }
 
-// ===== QUICK ADD TAAK AAN DAG =====
+// ===== TAAK TOEVOEGEN AAN DAG (via volledig modal) =====
+let voegToeAanDagNaSave = false;
+
 function snelTaakToevoegen() {
-  const omschrijving = prompt('Omschrijving nieuwe taak:');
-  if (!omschrijving?.trim()) return;
-
-  const taak = {
-    id: genId(),
-    omschrijving: omschrijving.trim(),
-    thema: 'Overig',
-    type: 'zakelijk',
-    periode: 'A',
-    grootte: 'K',
-    prio: 5,
-    tijdstip: null,
-    urgent: false,
-    belangrijk: true,
-    notities: '',
-    aangemaakt: new Date().toISOString()
-  };
-
-  taken.push(taak);
-  if (!dagPlanning[huidigeDag]) dagPlanning[huidigeDag] = {};
-  dagPlanning[huidigeDag][taak.id] = { gedaan: false, overgenomen: false };
-  slaData();
-  renderAlles();
+  voegToeAanDagNaSave = true;
+  // Stel defaults in die handig zijn voor een dag-taak
+  bewerkTaakId = null;
+  document.getElementById('modal-titel').textContent = 'Nieuwe taak voor vandaag';
+  document.getElementById('taak-omschrijving').value = '';
+  document.getElementById('taak-thema').value = 'Overig';
+  document.getElementById('taak-type').value = 'zakelijk';
+  document.getElementById('taak-periode').value = 'A';
+  document.getElementById('taak-grootte').value = 'K';
+  document.getElementById('taak-prio').value = 5;
+  document.getElementById('taak-tijd').value = '';
+  document.getElementById('taak-notities').value = '';
+  updateAutoIndicatie();
+  document.getElementById('modal-overlay').classList.remove('hidden');
+  document.getElementById('taak-omschrijving').focus();
 }
 
 // ===== URGENT / BELANGRIJK (automatisch) =====
