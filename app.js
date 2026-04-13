@@ -82,36 +82,52 @@ async function laadVanFirebase() {
   } catch(e) { console.error('Firebase laden mislukt', e); }
 }
 
+// ===== DATUM HELPERS =====
+function datumOffset(dagen, vanafStr) {
+  // Gewone kalender offset (geen weekend-skip), gebruikt voor archief/vergelijken
+  const d = new Date(vanafStr + 'T00:00:00');
+  d.setDate(d.getDate() + dagen);
+  return d.toISOString().slice(0,10);
+}
+
+function isWeekend(str) {
+  const dag = new Date(str + 'T00:00:00').getDay(); // 0=zon, 6=zat
+  return dag === 0 || dag === 6;
+}
+
+function werkdagStap(stap, vanafStr) {
+  // Navigeer één werkdag voor- of achteruit, skip zaterdag/zondag
+  let d = new Date(vanafStr + 'T00:00:00');
+  do {
+    d.setDate(d.getDate() + stap);
+  } while (d.getDay() === 0 || d.getDay() === 6);
+  return d.toISOString().slice(0,10);
+}
+
+function vorigeWerkdag(vanafStr) {
+  return werkdagStap(-1, vanafStr);
+}
+
 // ===== CARRY FORWARD =====
 function carryForward() {
   const vandaag = vandaagStr();
-  const gisteren = datumOffset(-1, vandaag);
+  if (isWeekend(vandaag)) return; // geen carry op weekenddagen
 
-  // Haal planning van gisteren op
-  const gisterPlanning = dagPlanning[gisteren];
-  if (!gisterPlanning) return;
+  const vorigeDag = vorigeWerkdag(vandaag);
+  const vorigePlanning = dagPlanning[vorigeDag];
+  if (!vorigePlanning) return;
 
-  // Zorg dat vandaag planning bestaat
   if (!dagPlanning[vandaag]) dagPlanning[vandaag] = {};
 
-  // Kopieer ongedane taken naar vandaag
   let overgenomen = 0;
-  for (const [taakId, info] of Object.entries(gisterPlanning)) {
-    if (!info.gedaan) {
-      if (!dagPlanning[vandaag][taakId]) {
-        dagPlanning[vandaag][taakId] = { gedaan: false, overgenomen: true };
-        overgenomen++;
-      }
+  for (const [taakId, info] of Object.entries(vorigePlanning)) {
+    if (!info.gedaan && !dagPlanning[vandaag][taakId]) {
+      dagPlanning[vandaag][taakId] = { gedaan: false, overgenomen: true };
+      overgenomen++;
     }
   }
 
   if (overgenomen > 0) slaData();
-}
-
-function datumOffset(dagen, vanafStr) {
-  const d = new Date(vanafStr + 'T00:00:00');
-  d.setDate(d.getDate() + dagen);
-  return d.toISOString().slice(0,10);
 }
 
 function formatDatum(str) {
@@ -227,6 +243,7 @@ function renderMaster() {
   const grootte = document.getElementById('filter-grootte').value;
   const type = document.getElementById('filter-type').value;
   const prio = document.getElementById('filter-prio').value;
+  const status = document.getElementById('filter-status').value;
 
   let gefilterd = taken.filter(t => {
     if (thema && t.thema !== thema) return false;
@@ -234,6 +251,8 @@ function renderMaster() {
     if (grootte && t.grootte !== grootte) return false;
     if (type && t.type !== type) return false;
     if (prio && String(t.prio) !== prio) return false;
+    if (status === 'actief' && t.afgerond) return false;
+    if (status === 'afgerond' && !t.afgerond) return false;
     return true;
   });
 
@@ -265,7 +284,10 @@ function renderMaster() {
 }
 
 function renderMasterKaart(t) {
-  return `<div class="task-card" data-id="${t.id}" onclick="bewerkTaak('${t.id}')">
+  const urgent = isUrgent(t);
+  const belangrijk = isBelangrijk(t);
+  const afgerond = !!t.afgerond;
+  return `<div class="task-card ${afgerond ? 'master-afgerond' : ''}" data-id="${t.id}" onclick="bewerkTaak('${t.id}')">
     <div class="task-body">
       <div class="task-omschrijving">${escHtml(t.omschrijving)}</div>
       <div class="task-meta">
@@ -273,14 +295,18 @@ function renderMasterKaart(t) {
         <span class="badge badge-${t.periode}">${t.periode}</span>
         <span class="badge badge-grootte">${t.grootte}</span>
         <span class="badge badge-prio">P${t.prio}</span>
-        ${t.urgent ? '<span class="badge badge-urgent">Urgent</span>' : ''}
-        ${!t.belangrijk ? '<span class="badge" style="background:#f1f5f9;color:#64748b">Niet belangrijk</span>' : ''}
-        ${t.notities ? '<span class="badge badge-grootte" title="'+escHtml(t.notities)+'">📝</span>' : ''}
+        ${urgent ? '<span class="badge badge-urgent">Urgent</span>' : ''}
+        ${!belangrijk ? '<span class="badge badge-grootte">Niet belangrijk</span>' : ''}
+        ${afgerond ? `<span class="badge badge-afgerond">Afgerond${t.afgerondDatum ? ' ' + t.afgerondDatum.slice(5,10).replace('-','/') : ''}</span>` : ''}
+        ${t.notities ? `<span class="badge badge-grootte" title="${escHtml(t.notities)}">📝</span>` : ''}
       </div>
     </div>
     <div class="task-actions">
-      <button class="task-action-btn" onclick="voegToeAanVandaag('${t.id}', event)" title="Aan dag toevoegen">+</button>
-      <button class="task-action-btn delete" onclick="verwijderTaak('${t.id}', event)" title="Verwijderen">🗑</button>
+      ${!afgerond ? `<button class="task-action-btn btn-dag" onclick="voegToeAanVandaag('${t.id}', event)" title="Aan vandaag toevoegen">+</button>` : ''}
+      <button class="task-action-btn btn-gedaan" onclick="toggleMasterAfgerond('${t.id}', event)" title="${afgerond ? 'Heropen' : 'Markeer als gedaan'}">
+        ${afgerond ? '↩' : '✓'}
+      </button>
+      <button class="task-action-btn btn-delete" onclick="verwijderTaak('${t.id}', event)" title="Verwijderen">🗑</button>
     </div>
   </div>`;
 }
@@ -297,6 +323,18 @@ function voegToeAanVandaag(taakId, event) {
     btn.textContent = '✓';
     setTimeout(() => btn.textContent = '+', 1000);
   }
+}
+
+function toggleMasterAfgerond(taakId, event) {
+  event.stopPropagation();
+  taken = taken.map(t => {
+    if (t.id !== taakId) return t;
+    const wordtAfgerond = !t.afgerond;
+    return { ...t, afgerond: wordtAfgerond, afgerondDatum: wordtAfgerond ? vandaagStr() : null };
+  });
+  slaData();
+  renderMaster();
+  renderMatrix();
 }
 
 function verwijderTaak(taakId, event) {
@@ -317,7 +355,7 @@ function renderMatrix() {
   cells.forEach(cell => {
     const urgent = cell.dataset.urgent === '1';
     const belangrijk = cell.dataset.belangrijk === '1';
-    const bijhorend = taken.filter(t => !!t.urgent === urgent && !!t.belangrijk === belangrijk);
+    const bijhorend = taken.filter(t => !t.afgerond && isUrgent(t) === urgent && isBelangrijk(t) === belangrijk);
     cell.innerHTML = bijhorend.length
       ? bijhorend.sort((a,b) => a.prio - b.prio).map(t =>
           `<div class="task-card" onclick="bewerkTaak('${t.id}')">
@@ -388,6 +426,19 @@ function renderArchief() {
 }
 
 // ===== MODAL TAAK =====
+function updateAutoIndicatie() {
+  const periode = document.getElementById('taak-periode').value;
+  const prio = parseInt(document.getElementById('taak-prio').value) || 5;
+  const urgent = periode === 'A';
+  const belangrijk = prio <= 5;
+  const ub = document.getElementById('auto-urgent-badge');
+  const bb = document.getElementById('auto-belangrijk-badge');
+  ub.textContent = urgent ? 'Urgent' : 'Niet urgent';
+  ub.className = 'badge ' + (urgent ? 'badge-urgent' : 'badge-grootte');
+  bb.textContent = belangrijk ? 'Belangrijk' : 'Niet belangrijk';
+  bb.className = 'badge ' + (belangrijk ? 'badge-A' : 'badge-grootte');
+}
+
 function openNieuweTaakModal() {
   bewerkTaakId = null;
   document.getElementById('modal-titel').textContent = 'Nieuwe taak';
@@ -398,9 +449,8 @@ function openNieuweTaakModal() {
   document.getElementById('taak-grootte').value = 'M';
   document.getElementById('taak-prio').value = 5;
   document.getElementById('taak-tijd').value = '';
-  document.getElementById('taak-urgent').checked = false;
-  document.getElementById('taak-belangrijk').checked = true;
   document.getElementById('taak-notities').value = '';
+  updateAutoIndicatie();
   document.getElementById('modal-overlay').classList.remove('hidden');
   document.getElementById('taak-omschrijving').focus();
 }
@@ -417,9 +467,8 @@ function bewerkTaak(taakId) {
   document.getElementById('taak-grootte').value = t.grootte;
   document.getElementById('taak-prio').value = t.prio;
   document.getElementById('taak-tijd').value = t.tijdstip || '';
-  document.getElementById('taak-urgent').checked = !!t.urgent;
-  document.getElementById('taak-belangrijk').checked = t.belangrijk !== false;
   document.getElementById('taak-notities').value = t.notities || '';
+  updateAutoIndicatie();
   document.getElementById('modal-overlay').classList.remove('hidden');
   document.getElementById('taak-omschrijving').focus();
 }
@@ -428,19 +477,23 @@ function slaModalOp() {
   const omschrijving = document.getElementById('taak-omschrijving').value.trim();
   if (!omschrijving) { document.getElementById('taak-omschrijving').focus(); return; }
 
+  const oud = bewerkTaakId ? taken.find(t => t.id === bewerkTaakId) : null;
+  const periode = document.getElementById('taak-periode').value;
+  const prio = parseInt(document.getElementById('taak-prio').value) || 5;
+
   const taak = {
     id: bewerkTaakId || genId(),
     omschrijving,
     thema: document.getElementById('taak-thema').value,
     type: document.getElementById('taak-type').value,
-    periode: document.getElementById('taak-periode').value,
+    periode,
     grootte: document.getElementById('taak-grootte').value,
-    prio: parseInt(document.getElementById('taak-prio').value) || 5,
+    prio,
     tijdstip: document.getElementById('taak-tijd').value || null,
-    urgent: document.getElementById('taak-urgent').checked,
-    belangrijk: document.getElementById('taak-belangrijk').checked,
     notities: document.getElementById('taak-notities').value.trim(),
-    aangemaakt: bewerkTaakId ? (taken.find(t => t.id === bewerkTaakId)?.aangemaakt || new Date().toISOString()) : new Date().toISOString()
+    afgerond: oud?.afgerond || false,
+    afgerondDatum: oud?.afgerondDatum || null,
+    aangemaakt: oud?.aangemaakt || new Date().toISOString()
   };
 
   if (bewerkTaakId) {
@@ -544,6 +597,12 @@ function snelTaakToevoegen() {
   renderAlles();
 }
 
+// ===== URGENT / BELANGRIJK (automatisch) =====
+// Urgent  = periode A (nu moet het)
+// Belangrijk = prioriteit 1 t/m 5
+function isUrgent(t)     { return t.periode === 'A'; }
+function isBelangrijk(t) { return t.prio <= 5; }
+
 // ===== HELPERS =====
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2,7);
@@ -578,13 +637,13 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => wisselTab(btn.dataset.tab));
   });
 
-  // Dag navigatie
+  // Dag navigatie (skip weekends)
   document.getElementById('prev-dag').addEventListener('click', () => {
-    huidigeDag = datumOffset(-1, huidigeDag);
+    huidigeDag = werkdagStap(-1, huidigeDag);
     renderDag();
   });
   document.getElementById('next-dag').addEventListener('click', () => {
-    huidigeDag = datumOffset(1, huidigeDag);
+    huidigeDag = werkdagStap(1, huidigeDag);
     renderDag();
   });
   document.getElementById('naar-vandaag').addEventListener('click', () => {
@@ -600,15 +659,20 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('nieuwe-taak-btn').addEventListener('click', openNieuweTaakModal);
 
   // Master filters
-  ['filter-thema','filter-periode','filter-grootte','filter-type','filter-prio'].forEach(id => {
+  ['filter-thema','filter-periode','filter-grootte','filter-type','filter-prio','filter-status'].forEach(id => {
     document.getElementById(id).addEventListener('change', renderMaster);
   });
   document.getElementById('filter-reset').addEventListener('click', () => {
     ['filter-thema','filter-periode','filter-grootte','filter-type','filter-prio'].forEach(id => {
       document.getElementById(id).value = '';
     });
+    document.getElementById('filter-status').value = 'actief';
     renderMaster();
   });
+
+  // Auto-indicatie in modal bijwerken bij wijzigen periode/prio
+  document.getElementById('taak-periode').addEventListener('change', updateAutoIndicatie);
+  document.getElementById('taak-prio').addEventListener('input', updateAutoIndicatie);
 
   // Modal opslaan/sluiten
   document.getElementById('modal-opslaan').addEventListener('click', slaModalOp);

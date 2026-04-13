@@ -289,7 +289,28 @@ header h1 {
 }
 
 .task-action-btn:hover { background: var(--border); }
-.task-action-btn.delete:hover { background: #fee2e2; color: var(--danger); }
+
+/* Drie aparte knoppen met vaste kleur */
+.btn-dag   { color: var(--primary); font-weight: 700; }
+.btn-dag:hover { background: #dbeafe; }
+
+.btn-gedaan { color: var(--success); font-weight: 700; }
+.btn-gedaan:hover { background: #dcfce7; }
+
+.btn-delete { color: var(--danger); }
+.btn-delete:hover { background: #fee2e2; }
+
+/* Afgeronde taak in master */
+.task-card.master-afgerond {
+  opacity: 0.55;
+  background: var(--surface2);
+}
+.task-card.master-afgerond .task-omschrijving {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.badge-afgerond { background: #dcfce7; color: #166534; }
 
 /* ===== MASTER LIJST ===== */
 .master-toolbar {
@@ -561,9 +582,16 @@ header h1 {
 
 .form-row.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
-.checkbox-row { display: flex; gap: 20px; align-items: center; }
-.checkbox-label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 14px; }
-.checkbox-label input { width: auto; }
+.auto-indicatie {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  background: var(--surface2);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
 
 /* ===== SELECT TAAK LIJST ===== */
 .select-task-list { max-height: 400px; overflow-y: auto; }

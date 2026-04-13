@@ -114,6 +114,11 @@
             <option value="9">Prio 9</option>
             <option value="10">Prio 10</option>
           </select>
+          <select id="filter-status" class="filter-select">
+            <option value="actief">Actief</option>
+            <option value="afgerond">Afgerond</option>
+            <option value="">Alles</option>
+          </select>
           <button id="filter-reset" class="reset-btn">✕ Reset</button>
         </div>
         <button id="nieuwe-taak-btn" class="primary-btn">+ Nieuwe taak</button>
@@ -238,13 +243,13 @@
             <input type="time" id="taak-tijd">
           </div>
         </div>
-        <div class="form-row checkbox-row">
-          <label class="checkbox-label">
-            <input type="checkbox" id="taak-urgent"> Urgent
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" id="taak-belangrijk" checked> Belangrijk
-          </label>
+        <div class="form-row">
+          <label>Urgentie &amp; Belang (automatisch)</label>
+          <div class="auto-indicatie" id="auto-indicatie">
+            <span id="auto-urgent-badge" class="badge">–</span>
+            <span id="auto-belangrijk-badge" class="badge">–</span>
+            <span style="font-size:11px;color:#64748b">Gebaseerd op periode (urgent) en prioriteit (belangrijk)</span>
+          </div>
         </div>
         <div class="form-row">
           <label>Notities</label>
