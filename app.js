@@ -1,0 +1,640 @@
+// ===== STORAGE =====
+const Storage = {
+  get(key, def = null) {
+    try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch { return def; }
+  },
+  set(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) { console.error('Storage error', e); }
+  }
+};
+
+// ===== STATE =====
+let taken = [];        // alle master taken
+let dagPlanning = {};  // { 'YYYY-MM-DD': { taakId: { gedaan, overgenomen, tijdstip } } }
+let huidigeDag = vandaagStr();
+let bewerkTaakId = null;
+let geselecteerdVoorDag = new Set();
+
+function vandaagStr() {
+  return new Date().toISOString().slice(0,10);
+}
+
+function laadData() {
+  taken = Storage.get('taken', []);
+  dagPlanning = Storage.get('dagPlanning', {});
+}
+
+function slaData() {
+  Storage.set('taken', taken);
+  Storage.set('dagPlanning', dagPlanning);
+  syncFirebase();
+}
+
+// ===== FIREBASE SYNC =====
+let db = null;
+let syncTimeout = null;
+
+function initFirebase() {
+  try {
+    if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
+      db = firebase.firestore();
+      laadVanFirebase();
+    }
+  } catch(e) { console.log('Firebase niet geconfigureerd, lokale opslag gebruikt'); }
+}
+
+function syncFirebase() {
+  if (!db) return;
+  clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(async () => {
+    try {
+      const syncBtn = document.getElementById('sync-btn');
+      syncBtn.textContent = '⟳';
+      syncBtn.className = 'icon-btn';
+      await db.collection('data').doc('taken').set({ taken });
+      await db.collection('data').doc('dagPlanning').set({ dagPlanning });
+      syncBtn.textContent = '✓';
+      syncBtn.className = 'icon-btn synced';
+    } catch(e) {
+      const syncBtn = document.getElementById('sync-btn');
+      syncBtn.textContent = '!';
+      syncBtn.className = 'icon-btn error';
+    }
+  }, 1000);
+}
+
+async function laadVanFirebase() {
+  if (!db) return;
+  try {
+    const [takenDoc, dagDoc] = await Promise.all([
+      db.collection('data').doc('taken').get(),
+      db.collection('data').doc('dagPlanning').get()
+    ]);
+    if (takenDoc.exists && takenDoc.data().taken) {
+      taken = takenDoc.data().taken;
+      Storage.set('taken', taken);
+    }
+    if (dagDoc.exists && dagDoc.data().dagPlanning) {
+      dagPlanning = dagDoc.data().dagPlanning;
+      Storage.set('dagPlanning', dagPlanning);
+    }
+    renderAlles();
+  } catch(e) { console.error('Firebase laden mislukt', e); }
+}
+
+// ===== CARRY FORWARD =====
+function carryForward() {
+  const vandaag = vandaagStr();
+  const gisteren = datumOffset(-1, vandaag);
+
+  // Haal planning van gisteren op
+  const gisterPlanning = dagPlanning[gisteren];
+  if (!gisterPlanning) return;
+
+  // Zorg dat vandaag planning bestaat
+  if (!dagPlanning[vandaag]) dagPlanning[vandaag] = {};
+
+  // Kopieer ongedane taken naar vandaag
+  let overgenomen = 0;
+  for (const [taakId, info] of Object.entries(gisterPlanning)) {
+    if (!info.gedaan) {
+      if (!dagPlanning[vandaag][taakId]) {
+        dagPlanning[vandaag][taakId] = { gedaan: false, overgenomen: true };
+        overgenomen++;
+      }
+    }
+  }
+
+  if (overgenomen > 0) slaData();
+}
+
+function datumOffset(dagen, vanafStr) {
+  const d = new Date(vanafStr + 'T00:00:00');
+  d.setDate(d.getDate() + dagen);
+  return d.toISOString().slice(0,10);
+}
+
+function formatDatum(str) {
+  const d = new Date(str + 'T00:00:00');
+  return d.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+// ===== RENDER DAG =====
+function renderDag() {
+  const vandaag = vandaagStr();
+  document.getElementById('dag-datum').textContent = formatDatum(huidigeDag);
+  document.getElementById('dag-label').textContent = huidigeDag === vandaag ? 'Vandaag' :
+    huidigeDag > vandaag ? 'Toekomst' : 'Verleden';
+
+  document.getElementById('naar-vandaag').style.display = huidigeDag === vandaag ? 'none' : 'inline-block';
+
+  const planning = dagPlanning[huidigeDag] || {};
+  const dagTaken = Object.keys(planning).map(id => {
+    const taak = taken.find(t => t.id === id);
+    if (!taak) return null;
+    return { ...taak, dagInfo: planning[id] };
+  }).filter(Boolean);
+
+  // Sorteren: tijd eerst, dan prio
+  const metTijd = dagTaken.filter(t => t.dagInfo.tijdstip).sort((a,b) => a.dagInfo.tijdstip.localeCompare(b.dagInfo.tijdstip));
+  const zakelijk = dagTaken.filter(t => !t.dagInfo.tijdstip && t.type === 'zakelijk').sort((a,b) => a.prio - b.prio);
+  const prive = dagTaken.filter(t => !t.dagInfo.tijdstip && t.type === 'prive').sort((a,b) => a.prio - b.prio);
+
+  renderDagLijst('lijst-tijd', metTijd, true);
+  renderDagLijst('lijst-zakelijk', zakelijk, false);
+  renderDagLijst('lijst-prive', prive, false);
+
+  document.getElementById('sectie-tijd').style.display = metTijd.length ? 'block' : 'none';
+
+  // Stats
+  const gedaan = dagTaken.filter(t => t.dagInfo.gedaan).length;
+  const overgenomen = dagTaken.filter(t => t.dagInfo.overgenomen).length;
+  document.getElementById('stat-gedaan').textContent = `${gedaan} gedaan`;
+  document.getElementById('stat-open').textContent = `${dagTaken.length - gedaan} open`;
+  document.getElementById('stat-tijd').textContent = `${overgenomen} overgenomen`;
+
+  // Counts
+  document.querySelector('#sectie-tijd .count').textContent = metTijd.length ? `(${metTijd.length})` : '';
+  document.querySelector('#sectie-zakelijk .count').textContent = zakelijk.length ? `(${zakelijk.length})` : '';
+  document.querySelector('#sectie-prive .count').textContent = prive.length ? `(${prive.length})` : '';
+}
+
+function renderDagLijst(containerId, taken, toonTijd) {
+  const el = document.getElementById(containerId);
+  if (!taken.length) { el.innerHTML = '<div class="empty-state" style="padding:10px;font-size:12px">Geen taken</div>'; return; }
+
+  el.innerHTML = taken.map(t => {
+    const gedaan = t.dagInfo.gedaan;
+    const overgenomen = t.dagInfo.overgenomen;
+    const tijdstip = t.dagInfo.tijdstip || t.tijdstip;
+
+    return `<div class="task-card ${gedaan ? 'gedaan' : ''} ${overgenomen ? 'overgenomen' : ''}" data-id="${t.id}">
+      <div class="task-check" onclick="toggleGedaan('${t.id}', event)">${gedaan ? '✓' : ''}</div>
+      <div class="task-body">
+        <div class="task-omschrijving">${escHtml(t.omschrijving)}</div>
+        <div class="task-meta">
+          <span class="badge badge-thema">${t.thema}</span>
+          <span class="badge badge-${t.type}">${t.type === 'zakelijk' ? 'Zakelijk' : 'Privé'}</span>
+          <span class="badge badge-${t.periode}">${t.periode}</span>
+          <span class="badge badge-grootte">${t.grootte}</span>
+          <span class="badge badge-prio">P${t.prio}</span>
+          ${tijdstip ? `<span class="badge badge-tijd">${tijdstip}</span>` : ''}
+          ${t.urgent ? '<span class="badge badge-urgent">Urgent</span>' : ''}
+          ${overgenomen ? '<span class="badge" style="background:#fef3c7;color:#92400e">Overgenomen</span>' : ''}
+        </div>
+      </div>
+      <div class="task-actions">
+        <button class="task-action-btn" onclick="openTijdstipModal('${t.id}', event)" title="Tijdstip">⏰</button>
+        <button class="task-action-btn" onclick="verwijderUitDag('${t.id}', event)" title="Verwijder uit dag">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleGedaan(taakId, event) {
+  event.stopPropagation();
+  if (!dagPlanning[huidigeDag]) dagPlanning[huidigeDag] = {};
+  const info = dagPlanning[huidigeDag][taakId] || {};
+  dagPlanning[huidigeDag][taakId] = { ...info, gedaan: !info.gedaan };
+  slaData();
+  renderDag();
+}
+
+function verwijderUitDag(taakId, event) {
+  event.stopPropagation();
+  if (dagPlanning[huidigeDag]) {
+    delete dagPlanning[huidigeDag][taakId];
+    slaData();
+    renderDag();
+  }
+}
+
+function openTijdstipModal(taakId, event) {
+  event.stopPropagation();
+  const huidigTijdstip = dagPlanning[huidigeDag]?.[taakId]?.tijdstip || '';
+  const nieuw = prompt('Tijdstip (bijv. 10:30), leeg om te verwijderen:', huidigTijdstip);
+  if (nieuw === null) return;
+  if (!dagPlanning[huidigeDag]) dagPlanning[huidigeDag] = {};
+  dagPlanning[huidigeDag][taakId] = { ...dagPlanning[huidigeDag][taakId], tijdstip: nieuw.trim() || null };
+  slaData();
+  renderDag();
+}
+
+// ===== RENDER MASTER =====
+function renderMaster() {
+  const thema = document.getElementById('filter-thema').value;
+  const periode = document.getElementById('filter-periode').value;
+  const grootte = document.getElementById('filter-grootte').value;
+  const type = document.getElementById('filter-type').value;
+  const prio = document.getElementById('filter-prio').value;
+
+  let gefilterd = taken.filter(t => {
+    if (thema && t.thema !== thema) return false;
+    if (periode && t.periode !== periode) return false;
+    if (grootte && t.grootte !== grootte) return false;
+    if (type && t.type !== type) return false;
+    if (prio && String(t.prio) !== prio) return false;
+    return true;
+  });
+
+  // Groepeer per thema
+  const themas = ['IURC', 'AI', 'Innovatie', 'DHM', 'TD', 'EU', 'Presentatie', 'Overig'];
+  const container = document.getElementById('master-lijst');
+
+  if (!gefilterd.length) {
+    container.innerHTML = '<div class="empty-state">Geen taken gevonden. Maak een nieuwe taak aan.</div>';
+    return;
+  }
+
+  const perThema = {};
+  for (const t of themas) perThema[t] = [];
+  for (const t of gefilterd) {
+    if (!perThema[t.thema]) perThema[t.thema] = [];
+    perThema[t.thema].push(t);
+  }
+
+  container.innerHTML = themas.map(t => {
+    const lijst = perThema[t];
+    if (!lijst.length) return '';
+    const gesorteerd = lijst.sort((a,b) => a.prio - b.prio);
+    return `<div class="thema-groep">
+      <div class="thema-header">${t} <span class="thema-count">${lijst.length} taken</span></div>
+      ${gesorteerd.map(taak => renderMasterKaart(taak)).join('')}
+    </div>`;
+  }).join('');
+}
+
+function renderMasterKaart(t) {
+  return `<div class="task-card" data-id="${t.id}" onclick="bewerkTaak('${t.id}')">
+    <div class="task-body">
+      <div class="task-omschrijving">${escHtml(t.omschrijving)}</div>
+      <div class="task-meta">
+        <span class="badge badge-${t.type}">${t.type === 'zakelijk' ? 'Zakelijk' : 'Privé'}</span>
+        <span class="badge badge-${t.periode}">${t.periode}</span>
+        <span class="badge badge-grootte">${t.grootte}</span>
+        <span class="badge badge-prio">P${t.prio}</span>
+        ${t.urgent ? '<span class="badge badge-urgent">Urgent</span>' : ''}
+        ${!t.belangrijk ? '<span class="badge" style="background:#f1f5f9;color:#64748b">Niet belangrijk</span>' : ''}
+        ${t.notities ? '<span class="badge badge-grootte" title="'+escHtml(t.notities)+'">📝</span>' : ''}
+      </div>
+    </div>
+    <div class="task-actions">
+      <button class="task-action-btn" onclick="voegToeAanVandaag('${t.id}', event)" title="Aan dag toevoegen">+</button>
+      <button class="task-action-btn delete" onclick="verwijderTaak('${t.id}', event)" title="Verwijderen">🗑</button>
+    </div>
+  </div>`;
+}
+
+function voegToeAanVandaag(taakId, event) {
+  event.stopPropagation();
+  const dag = vandaagStr();
+  if (!dagPlanning[dag]) dagPlanning[dag] = {};
+  if (!dagPlanning[dag][taakId]) {
+    dagPlanning[dag][taakId] = { gedaan: false, overgenomen: false };
+    slaData();
+    // Toon bevestiging
+    const btn = event.target;
+    btn.textContent = '✓';
+    setTimeout(() => btn.textContent = '+', 1000);
+  }
+}
+
+function verwijderTaak(taakId, event) {
+  event.stopPropagation();
+  if (!confirm('Taak definitief verwijderen?')) return;
+  taken = taken.filter(t => t.id !== taakId);
+  // Verwijder ook uit alle dagplanningen
+  for (const dag of Object.keys(dagPlanning)) {
+    delete dagPlanning[dag][taakId];
+  }
+  slaData();
+  renderAlles();
+}
+
+// ===== RENDER MATRIX =====
+function renderMatrix() {
+  const cells = document.querySelectorAll('.cell-tasks');
+  cells.forEach(cell => {
+    const urgent = cell.dataset.urgent === '1';
+    const belangrijk = cell.dataset.belangrijk === '1';
+    const bijhorend = taken.filter(t => !!t.urgent === urgent && !!t.belangrijk === belangrijk);
+    cell.innerHTML = bijhorend.length
+      ? bijhorend.sort((a,b) => a.prio - b.prio).map(t =>
+          `<div class="task-card" onclick="bewerkTaak('${t.id}')">
+            <div class="task-body">
+              <div class="task-omschrijving" style="font-size:12px">${escHtml(t.omschrijving)}</div>
+              <div class="task-meta">
+                <span class="badge badge-thema" style="font-size:10px">${t.thema}</span>
+                <span class="badge badge-${t.periode}" style="font-size:10px">${t.periode}</span>
+                <span class="badge badge-prio" style="font-size:10px">P${t.prio}</span>
+              </div>
+            </div>
+          </div>`).join('')
+      : '<div style="color:#94a3b8;font-size:12px;padding:8px">Leeg</div>';
+  });
+}
+
+// ===== RENDER ARCHIEF =====
+function renderArchief() {
+  const maandInput = document.getElementById('archief-maand').value;
+  const themaFilter = document.getElementById('archief-thema').value;
+  const container = document.getElementById('archief-lijst');
+
+  // Alle dagen met planning, gesorteerd aflopend
+  const dagen = Object.keys(dagPlanning).sort((a,b) => b.localeCompare(a));
+
+  const gefilterdeDagen = dagen.filter(dag => {
+    if (maandInput && !dag.startsWith(maandInput)) return false;
+    return true;
+  });
+
+  if (!gefilterdeDagen.length) {
+    container.innerHTML = '<div class="empty-state">Geen archief gevonden.</div>';
+    return;
+  }
+
+  container.innerHTML = gefilterdeDagen.map(dag => {
+    const planning = dagPlanning[dag];
+    let dagTaken = Object.keys(planning).map(id => {
+      const taak = taken.find(t => t.id === id);
+      if (!taak) return null;
+      if (themaFilter && taak.thema !== themaFilter) return null;
+      return { ...taak, dagInfo: planning[id] };
+    }).filter(Boolean);
+
+    if (!dagTaken.length) return '';
+
+    const gedaan = dagTaken.filter(t => t.dagInfo.gedaan).length;
+    return `<div class="dag-archief-item">
+      <div class="dag-archief-header">
+        <span>${formatDatum(dag)}</span>
+        <span style="font-size:12px;color:#64748b">${gedaan}/${dagTaken.length} gedaan</span>
+      </div>
+      ${dagTaken.map(t => `
+        <div class="task-card ${t.dagInfo.gedaan ? 'gedaan' : ''}" style="cursor:default">
+          <div class="task-check">${t.dagInfo.gedaan ? '✓' : ''}</div>
+          <div class="task-body">
+            <div class="task-omschrijving">${escHtml(t.omschrijving)}</div>
+            <div class="task-meta">
+              <span class="badge badge-thema">${t.thema}</span>
+              <span class="badge badge-${t.type}">${t.type === 'zakelijk' ? 'Zakelijk' : 'Privé'}</span>
+              <span class="badge badge-${t.periode}">${t.periode}</span>
+              ${t.dagInfo.overgenomen ? '<span class="badge" style="background:#fef3c7;color:#92400e">Overgenomen</span>' : ''}
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+// ===== MODAL TAAK =====
+function openNieuweTaakModal() {
+  bewerkTaakId = null;
+  document.getElementById('modal-titel').textContent = 'Nieuwe taak';
+  document.getElementById('taak-omschrijving').value = '';
+  document.getElementById('taak-thema').value = 'IURC';
+  document.getElementById('taak-type').value = 'zakelijk';
+  document.getElementById('taak-periode').value = 'B';
+  document.getElementById('taak-grootte').value = 'M';
+  document.getElementById('taak-prio').value = 5;
+  document.getElementById('taak-tijd').value = '';
+  document.getElementById('taak-urgent').checked = false;
+  document.getElementById('taak-belangrijk').checked = true;
+  document.getElementById('taak-notities').value = '';
+  document.getElementById('modal-overlay').classList.remove('hidden');
+  document.getElementById('taak-omschrijving').focus();
+}
+
+function bewerkTaak(taakId) {
+  const t = taken.find(t => t.id === taakId);
+  if (!t) return;
+  bewerkTaakId = taakId;
+  document.getElementById('modal-titel').textContent = 'Taak bewerken';
+  document.getElementById('taak-omschrijving').value = t.omschrijving;
+  document.getElementById('taak-thema').value = t.thema;
+  document.getElementById('taak-type').value = t.type;
+  document.getElementById('taak-periode').value = t.periode;
+  document.getElementById('taak-grootte').value = t.grootte;
+  document.getElementById('taak-prio').value = t.prio;
+  document.getElementById('taak-tijd').value = t.tijdstip || '';
+  document.getElementById('taak-urgent').checked = !!t.urgent;
+  document.getElementById('taak-belangrijk').checked = t.belangrijk !== false;
+  document.getElementById('taak-notities').value = t.notities || '';
+  document.getElementById('modal-overlay').classList.remove('hidden');
+  document.getElementById('taak-omschrijving').focus();
+}
+
+function slaModalOp() {
+  const omschrijving = document.getElementById('taak-omschrijving').value.trim();
+  if (!omschrijving) { document.getElementById('taak-omschrijving').focus(); return; }
+
+  const taak = {
+    id: bewerkTaakId || genId(),
+    omschrijving,
+    thema: document.getElementById('taak-thema').value,
+    type: document.getElementById('taak-type').value,
+    periode: document.getElementById('taak-periode').value,
+    grootte: document.getElementById('taak-grootte').value,
+    prio: parseInt(document.getElementById('taak-prio').value) || 5,
+    tijdstip: document.getElementById('taak-tijd').value || null,
+    urgent: document.getElementById('taak-urgent').checked,
+    belangrijk: document.getElementById('taak-belangrijk').checked,
+    notities: document.getElementById('taak-notities').value.trim(),
+    aangemaakt: bewerkTaakId ? (taken.find(t => t.id === bewerkTaakId)?.aangemaakt || new Date().toISOString()) : new Date().toISOString()
+  };
+
+  if (bewerkTaakId) {
+    taken = taken.map(t => t.id === bewerkTaakId ? taak : t);
+  } else {
+    taken.push(taak);
+  }
+
+  sluitModal();
+  slaData();
+  renderAlles();
+}
+
+function sluitModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+  bewerkTaakId = null;
+}
+
+// ===== SELECTEER TAKEN VOOR DAG =====
+function openSelecteerModal() {
+  geselecteerdVoorDag.clear();
+  renderSelecteerLijst();
+  document.getElementById('select-modal-overlay').classList.remove('hidden');
+}
+
+function renderSelecteerLijst() {
+  const thema = document.getElementById('sel-filter-thema').value;
+  const periode = document.getElementById('sel-filter-periode').value;
+  const planning = dagPlanning[huidigeDag] || {};
+
+  const beschikbaar = taken.filter(t => {
+    if (planning[t.id] !== undefined) return false; // al in dag
+    if (thema && t.thema !== thema) return false;
+    if (periode && t.periode !== periode) return false;
+    return true;
+  }).sort((a,b) => a.prio - b.prio);
+
+  const container = document.getElementById('select-taak-lijst');
+  if (!beschikbaar.length) {
+    container.innerHTML = '<div class="empty-state">Geen taken beschikbaar</div>';
+    return;
+  }
+
+  container.innerHTML = beschikbaar.map(t => {
+    const sel = geselecteerdVoorDag.has(t.id);
+    return `<div class="select-task-item ${sel ? 'selected' : ''}" onclick="toggleSelecteer('${t.id}')">
+      <input type="checkbox" ${sel ? 'checked' : ''}>
+      <div style="flex:1">
+        <div style="font-weight:500;font-size:13px">${escHtml(t.omschrijving)}</div>
+        <div class="task-meta" style="margin-top:3px">
+          <span class="badge badge-thema">${t.thema}</span>
+          <span class="badge badge-${t.periode}">${t.periode}</span>
+          <span class="badge badge-grootte">${t.grootte}</span>
+          <span class="badge badge-prio">P${t.prio}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleSelecteer(taakId) {
+  if (geselecteerdVoorDag.has(taakId)) geselecteerdVoorDag.delete(taakId);
+  else geselecteerdVoorDag.add(taakId);
+  renderSelecteerLijst();
+}
+
+function voegGeselecteerdeToe() {
+  if (!dagPlanning[huidigeDag]) dagPlanning[huidigeDag] = {};
+  for (const id of geselecteerdVoorDag) {
+    dagPlanning[huidigeDag][id] = { gedaan: false, overgenomen: false };
+  }
+  slaData();
+  renderDag();
+  document.getElementById('select-modal-overlay').classList.add('hidden');
+}
+
+// ===== QUICK ADD TAAK AAN DAG =====
+function snelTaakToevoegen() {
+  const omschrijving = prompt('Omschrijving nieuwe taak:');
+  if (!omschrijving?.trim()) return;
+
+  const taak = {
+    id: genId(),
+    omschrijving: omschrijving.trim(),
+    thema: 'Overig',
+    type: 'zakelijk',
+    periode: 'A',
+    grootte: 'K',
+    prio: 5,
+    tijdstip: null,
+    urgent: false,
+    belangrijk: true,
+    notities: '',
+    aangemaakt: new Date().toISOString()
+  };
+
+  taken.push(taak);
+  if (!dagPlanning[huidigeDag]) dagPlanning[huidigeDag] = {};
+  dagPlanning[huidigeDag][taak.id] = { gedaan: false, overgenomen: false };
+  slaData();
+  renderAlles();
+}
+
+// ===== HELPERS =====
+function genId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderAlles() {
+  renderDag();
+  renderMaster();
+  renderMatrix();
+  renderArchief();
+}
+
+// ===== NAVIGATIE =====
+function wisselTab(naam) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === naam));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + naam));
+}
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded', () => {
+  laadData();
+  carryForward();
+  initFirebase();
+  renderAlles();
+
+  // Tab navigatie
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => wisselTab(btn.dataset.tab));
+  });
+
+  // Dag navigatie
+  document.getElementById('prev-dag').addEventListener('click', () => {
+    huidigeDag = datumOffset(-1, huidigeDag);
+    renderDag();
+  });
+  document.getElementById('next-dag').addEventListener('click', () => {
+    huidigeDag = datumOffset(1, huidigeDag);
+    renderDag();
+  });
+  document.getElementById('naar-vandaag').addEventListener('click', () => {
+    huidigeDag = vandaagStr();
+    renderDag();
+  });
+
+  // Dag acties
+  document.getElementById('taak-toevoegen-dag').addEventListener('click', snelTaakToevoegen);
+  document.getElementById('taken-selecteren').addEventListener('click', openSelecteerModal);
+
+  // Master nieuw
+  document.getElementById('nieuwe-taak-btn').addEventListener('click', openNieuweTaakModal);
+
+  // Master filters
+  ['filter-thema','filter-periode','filter-grootte','filter-type','filter-prio'].forEach(id => {
+    document.getElementById(id).addEventListener('change', renderMaster);
+  });
+  document.getElementById('filter-reset').addEventListener('click', () => {
+    ['filter-thema','filter-periode','filter-grootte','filter-type','filter-prio'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    renderMaster();
+  });
+
+  // Modal opslaan/sluiten
+  document.getElementById('modal-opslaan').addEventListener('click', slaModalOp);
+  document.getElementById('modal-sluiten').addEventListener('click', sluitModal);
+  document.getElementById('modal-annuleren').addEventListener('click', sluitModal);
+  document.getElementById('modal-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) sluitModal(); });
+
+  // Enter in modal
+  document.getElementById('taak-omschrijving').addEventListener('keydown', e => { if (e.key === 'Enter') slaModalOp(); });
+
+  // Selecteer modal
+  document.getElementById('select-modal-sluiten').addEventListener('click', () => {
+    document.getElementById('select-modal-overlay').classList.add('hidden');
+  });
+  document.getElementById('select-modal-annuleren').addEventListener('click', () => {
+    document.getElementById('select-modal-overlay').classList.add('hidden');
+  });
+  document.getElementById('select-modal-toevoegen').addEventListener('click', voegGeselecteerdeToe);
+  document.getElementById('sel-filter-thema').addEventListener('change', renderSelecteerLijst);
+  document.getElementById('sel-filter-periode').addEventListener('change', renderSelecteerLijst);
+
+  // Archief filters
+  document.getElementById('archief-maand').addEventListener('change', renderArchief);
+  document.getElementById('archief-thema').addEventListener('change', renderArchief);
+  document.getElementById('archief-maand').value = new Date().toISOString().slice(0,7);
+
+  // Sync knop
+  document.getElementById('sync-btn').addEventListener('click', () => laadVanFirebase().then(renderAlles));
+});

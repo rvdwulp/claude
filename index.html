@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Todo Planner</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header>
+      <div class="header-left">
+        <h1>Todo Planner</h1>
+      </div>
+      <nav class="tab-nav">
+        <button class="tab-btn active" data-tab="dag">Dag</button>
+        <button class="tab-btn" data-tab="master">Master</button>
+        <button class="tab-btn" data-tab="matrix">Matrix</button>
+        <button class="tab-btn" data-tab="archief">Archief</button>
+      </nav>
+      <div class="header-right">
+        <button id="sync-btn" class="icon-btn" title="Sync status">⟳</button>
+      </div>
+    </header>
+
+    <!-- DAG TAB -->
+    <div id="tab-dag" class="tab-content active">
+      <div class="dag-header">
+        <button id="prev-dag" class="nav-btn">‹</button>
+        <div class="dag-title">
+          <span id="dag-datum"></span>
+          <span id="dag-label"></span>
+        </div>
+        <button id="next-dag" class="nav-btn">›</button>
+        <button id="naar-vandaag" class="today-btn" style="display:none">Vandaag</button>
+      </div>
+
+      <div class="dag-stats">
+        <span id="stat-gedaan">0 gedaan</span>
+        <span id="stat-open">0 open</span>
+        <span id="stat-tijd">0 overgenomen</span>
+      </div>
+
+      <div class="dag-sections">
+        <!-- Tijdsgebonden -->
+        <section class="dag-section" id="sectie-tijd">
+          <h3 class="section-title">Op tijd <span class="count"></span></h3>
+          <div class="task-list" id="lijst-tijd"></div>
+        </section>
+
+        <!-- Zakelijk -->
+        <section class="dag-section" id="sectie-zakelijk">
+          <h3 class="section-title">Zakelijk <span class="count"></span></h3>
+          <div class="task-list" id="lijst-zakelijk"></div>
+        </section>
+
+        <!-- Privé -->
+        <section class="dag-section" id="sectie-prive">
+          <h3 class="section-title">Privé <span class="count"></span></h3>
+          <div class="task-list" id="lijst-prive"></div>
+        </section>
+      </div>
+
+      <div class="dag-actions">
+        <button id="taak-toevoegen-dag" class="primary-btn">+ Taak toevoegen aan dag</button>
+        <button id="taken-selecteren" class="secondary-btn">Taken selecteren uit master</button>
+      </div>
+    </div>
+
+    <!-- MASTER TAB -->
+    <div id="tab-master" class="tab-content">
+      <div class="master-toolbar">
+        <div class="filter-row">
+          <select id="filter-thema" class="filter-select">
+            <option value="">Alle thema's</option>
+            <option value="IURC">IURC</option>
+            <option value="AI">AI</option>
+            <option value="Innovatie">Innovatie</option>
+            <option value="DHM">DHM</option>
+            <option value="TD">TD</option>
+            <option value="EU">EU</option>
+            <option value="Presentatie">Presentatie</option>
+            <option value="Overig">Overig</option>
+          </select>
+          <select id="filter-periode" class="filter-select">
+            <option value="">Alle periodes</option>
+            <option value="A">A – Nu</option>
+            <option value="B">B – &lt; 2 weken</option>
+            <option value="C">C – &gt; 2 weken</option>
+          </select>
+          <select id="filter-grootte" class="filter-select">
+            <option value="">Alle groottes</option>
+            <option value="K">K – &lt; 1 uur</option>
+            <option value="M">M – 2-3 uur</option>
+            <option value="L">L – 4-8 uur</option>
+            <option value="XL">XL – &gt; 8 uur</option>
+          </select>
+          <select id="filter-type" class="filter-select">
+            <option value="">Zakelijk + Privé</option>
+            <option value="zakelijk">Zakelijk</option>
+            <option value="prive">Privé</option>
+          </select>
+          <select id="filter-prio" class="filter-select">
+            <option value="">Alle prio's</option>
+            <option value="1">Prio 1</option>
+            <option value="2">Prio 2</option>
+            <option value="3">Prio 3</option>
+            <option value="4">Prio 4</option>
+            <option value="5">Prio 5</option>
+            <option value="6">Prio 6</option>
+            <option value="7">Prio 7</option>
+            <option value="8">Prio 8</option>
+            <option value="9">Prio 9</option>
+            <option value="10">Prio 10</option>
+          </select>
+          <button id="filter-reset" class="reset-btn">✕ Reset</button>
+        </div>
+        <button id="nieuwe-taak-btn" class="primary-btn">+ Nieuwe taak</button>
+      </div>
+
+      <div id="master-lijst" class="master-list"></div>
+    </div>
+
+    <!-- MATRIX TAB -->
+    <div id="tab-matrix" class="tab-content">
+      <div class="matrix-grid">
+        <div class="matrix-header-row">
+          <div class="matrix-corner"></div>
+          <div class="matrix-col-header">Urgent</div>
+          <div class="matrix-col-header">Niet urgent</div>
+        </div>
+        <div class="matrix-row">
+          <div class="matrix-row-header">Belangrijk</div>
+          <div class="matrix-cell" id="cell-UB">
+            <div class="cell-label">Doe nu</div>
+            <div class="cell-tasks" data-urgent="1" data-belangrijk="1"></div>
+          </div>
+          <div class="matrix-cell" id="cell-NUB">
+            <div class="cell-label">Plan in</div>
+            <div class="cell-tasks" data-urgent="0" data-belangrijk="1"></div>
+          </div>
+        </div>
+        <div class="matrix-row">
+          <div class="matrix-row-header">Niet belangrijk</div>
+          <div class="matrix-cell" id="cell-UNB">
+            <div class="cell-label">Delegeer</div>
+            <div class="cell-tasks" data-urgent="1" data-belangrijk="0"></div>
+          </div>
+          <div class="matrix-cell" id="cell-NUNB">
+            <div class="cell-label">Elimineer</div>
+            <div class="cell-tasks" data-urgent="0" data-belangrijk="0"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ARCHIEF TAB -->
+    <div id="tab-archief" class="tab-content">
+      <div class="archief-toolbar">
+        <input type="month" id="archief-maand" class="filter-select">
+        <select id="archief-thema" class="filter-select">
+          <option value="">Alle thema's</option>
+          <option value="IURC">IURC</option>
+          <option value="AI">AI</option>
+          <option value="Innovatie">Innovatie</option>
+          <option value="DHM">DHM</option>
+          <option value="TD">TD</option>
+          <option value="EU">EU</option>
+          <option value="Presentatie">Presentatie</option>
+          <option value="Overig">Overig</option>
+        </select>
+      </div>
+      <div id="archief-lijst"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: Taak aanmaken/bewerken -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modal-titel">Nieuwe taak</h2>
+        <button class="close-btn" id="modal-sluiten">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <label>Omschrijving *</label>
+          <input type="text" id="taak-omschrijving" placeholder="Wat moet er gedaan worden?" autocomplete="off">
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label>Thema *</label>
+            <select id="taak-thema">
+              <option value="IURC">IURC</option>
+              <option value="AI">AI</option>
+              <option value="Innovatie">Innovatie</option>
+              <option value="DHM">DHM</option>
+              <option value="TD">TD</option>
+              <option value="EU">EU</option>
+              <option value="Presentatie">Presentatie</option>
+              <option value="Overig">Overig</option>
+            </select>
+          </div>
+          <div>
+            <label>Type</label>
+            <select id="taak-type">
+              <option value="zakelijk">Zakelijk</option>
+              <option value="prive">Privé</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label>Periode</label>
+            <select id="taak-periode">
+              <option value="A">A – Nu</option>
+              <option value="B">B – &lt; 2 weken</option>
+              <option value="C">C – &gt; 2 weken</option>
+            </select>
+          </div>
+          <div>
+            <label>Grootte</label>
+            <select id="taak-grootte">
+              <option value="K">K – &lt; 1 uur</option>
+              <option value="M">M – 2-3 uur</option>
+              <option value="L">L – 4-8 uur</option>
+              <option value="XL">XL – &gt; 8 uur</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label>Prioriteit (1-10)</label>
+            <input type="number" id="taak-prio" min="1" max="10" value="5">
+          </div>
+          <div>
+            <label>Tijdstip (optioneel)</label>
+            <input type="time" id="taak-tijd">
+          </div>
+        </div>
+        <div class="form-row checkbox-row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="taak-urgent"> Urgent
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="taak-belangrijk" checked> Belangrijk
+          </label>
+        </div>
+        <div class="form-row">
+          <label>Notities</label>
+          <textarea id="taak-notities" rows="3" placeholder="Extra informatie..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="secondary-btn" id="modal-annuleren">Annuleren</button>
+        <button class="primary-btn" id="modal-opslaan">Opslaan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Taken selecteren voor dag -->
+  <div id="select-modal-overlay" class="modal-overlay hidden">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h2>Taken toevoegen aan dag</h2>
+        <button class="close-btn" id="select-modal-sluiten">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="filter-row">
+          <select id="sel-filter-thema" class="filter-select">
+            <option value="">Alle thema's</option>
+            <option value="IURC">IURC</option>
+            <option value="AI">AI</option>
+            <option value="Innovatie">Innovatie</option>
+            <option value="DHM">DHM</option>
+            <option value="TD">TD</option>
+            <option value="EU">EU</option>
+            <option value="Presentatie">Presentatie</option>
+            <option value="Overig">Overig</option>
+          </select>
+          <select id="sel-filter-periode" class="filter-select">
+            <option value="">Alle periodes</option>
+            <option value="A">A – Nu</option>
+            <option value="B">B – &lt; 2 weken</option>
+            <option value="C">C – &gt; 2 weken</option>
+          </select>
+        </div>
+        <div id="select-taak-lijst" class="select-task-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="secondary-btn" id="select-modal-annuleren">Annuleren</button>
+        <button class="primary-btn" id="select-modal-toevoegen">Toevoegen aan dag</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
