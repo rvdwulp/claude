@@ -147,7 +147,7 @@ function renderDag() {
   const planning = dagPlanning[huidigeDag] || {};
   const dagTaken = Object.keys(planning).map(id => {
     const taak = taken.find(t => t.id === id);
-    if (!taak) return null;
+    if (!taak || taak.verwijderd) return null; // verwijderde taken niet tonen in dag
     return { ...taak, dagInfo: planning[id] };
   }).filter(Boolean);
 
@@ -186,6 +186,7 @@ function renderDagLijst(containerId, taken, toonTijd) {
 
     return `<div class="task-card ${gedaan ? 'gedaan' : ''} ${overgenomen ? 'overgenomen' : ''}" data-id="${t.id}">
       <div class="task-check" onclick="toggleGedaan('${t.id}', event)">${gedaan ? '✓' : ''}</div>
+      ${tijdstip ? `<div class="task-tijdstip">${tijdstip}</div>` : ''}
       <div class="task-body">
         <div class="task-omschrijving">${escHtml(t.omschrijving)}</div>
         <div class="task-meta">
@@ -194,8 +195,7 @@ function renderDagLijst(containerId, taken, toonTijd) {
           <span class="badge badge-${t.periode}">${t.periode}</span>
           <span class="badge badge-grootte">${t.grootte}</span>
           <span class="badge badge-prio">P${t.prio}</span>
-          ${tijdstip ? `<span class="badge badge-tijd">${tijdstip}</span>` : ''}
-          ${t.urgent ? '<span class="badge badge-urgent">Urgent</span>' : ''}
+          ${isUrgent(t) ? '<span class="badge badge-urgent">Urgent</span>' : ''}
           ${overgenomen ? '<span class="badge" style="background:#fef3c7;color:#92400e">Overgenomen</span>' : ''}
         </div>
       </div>
@@ -246,6 +246,7 @@ function renderMaster() {
   const status = document.getElementById('filter-status').value;
 
   let gefilterd = taken.filter(t => {
+    if (t.verwijderd) return false; // verwijderde taken nooit in master
     if (thema && t.thema !== thema) return false;
     if (periode && t.periode !== periode) return false;
     if (grootte && t.grootte !== grootte) return false;
@@ -339,12 +340,11 @@ function toggleMasterAfgerond(taakId, event) {
 
 function verwijderTaak(taakId, event) {
   event.stopPropagation();
-  if (!confirm('Taak definitief verwijderen?')) return;
-  taken = taken.filter(t => t.id !== taakId);
-  // Verwijder ook uit alle dagplanningen
-  for (const dag of Object.keys(dagPlanning)) {
-    delete dagPlanning[dag][taakId];
-  }
+  if (!confirm('Taak verwijderen? De taak blijft zichtbaar in het archief.')) return;
+  // Soft-delete: markeer als verwijderd zodat archief het kan tonen
+  taken = taken.map(t => t.id !== taakId ? t :
+    { ...t, verwijderd: true, verwijderdDatum: vandaagStr() }
+  );
   slaData();
   renderAlles();
 }
@@ -355,7 +355,7 @@ function renderMatrix() {
   cells.forEach(cell => {
     const urgent = cell.dataset.urgent === '1';
     const belangrijk = cell.dataset.belangrijk === '1';
-    const bijhorend = taken.filter(t => !t.afgerond && isUrgent(t) === urgent && isBelangrijk(t) === belangrijk);
+    const bijhorend = taken.filter(t => !t.afgerond && !t.verwijderd && isUrgent(t) === urgent && isBelangrijk(t) === belangrijk);
     cell.innerHTML = bijhorend.length
       ? bijhorend.sort((a,b) => a.prio - b.prio).map(t =>
           `<div class="task-card" onclick="bewerkTaak('${t.id}')">
@@ -402,25 +402,36 @@ function renderArchief() {
 
     if (!dagTaken.length) return '';
 
-    const gedaan = dagTaken.filter(t => t.dagInfo.gedaan).length;
+    const aantalGedaan = dagTaken.filter(t => t.dagInfo.gedaan && !t.verwijderd).length;
+    const aantalVerwijderd = dagTaken.filter(t => t.verwijderd).length;
+    const aantalTotaal = dagTaken.filter(t => !t.verwijderd).length;
+
     return `<div class="dag-archief-item">
       <div class="dag-archief-header">
         <span>${formatDatum(dag)}</span>
-        <span style="font-size:12px;color:#64748b">${gedaan}/${dagTaken.length} gedaan</span>
+        <span style="font-size:12px;color:#64748b">
+          ${aantalGedaan}/${aantalTotaal} gedaan
+          ${aantalVerwijderd ? `· <span style="color:#dc2626">${aantalVerwijderd} verwijderd</span>` : ''}
+        </span>
       </div>
-      ${dagTaken.map(t => `
-        <div class="task-card ${t.dagInfo.gedaan ? 'gedaan' : ''}" style="cursor:default">
-          <div class="task-check">${t.dagInfo.gedaan ? '✓' : ''}</div>
+      ${dagTaken.map(t => {
+        const isVerwijderd = !!t.verwijderd;
+        const isGedaan = t.dagInfo.gedaan && !isVerwijderd;
+        return `
+        <div class="task-card ${isGedaan ? 'gedaan' : ''} ${isVerwijderd ? 'archief-verwijderd' : ''}" style="cursor:default">
+          <div class="task-check">${isGedaan ? '✓' : isVerwijderd ? '🗑' : ''}</div>
           <div class="task-body">
             <div class="task-omschrijving">${escHtml(t.omschrijving)}</div>
             <div class="task-meta">
               <span class="badge badge-thema">${t.thema}</span>
               <span class="badge badge-${t.type}">${t.type === 'zakelijk' ? 'Zakelijk' : 'Privé'}</span>
               <span class="badge badge-${t.periode}">${t.periode}</span>
-              ${t.dagInfo.overgenomen ? '<span class="badge" style="background:#fef3c7;color:#92400e">Overgenomen</span>' : ''}
+              ${isVerwijderd ? '<span class="badge badge-verwijderd">Verwijderd</span>' : ''}
+              ${t.dagInfo.overgenomen && !isVerwijderd ? '<span class="badge" style="background:#fef3c7;color:#92400e">Overgenomen</span>' : ''}
             </div>
           </div>
-        </div>`).join('')}
+        </div>`;
+      }).join('')}
     </div>`;
   }).join('');
 }
@@ -525,6 +536,7 @@ function renderSelecteerLijst() {
   const planning = dagPlanning[huidigeDag] || {};
 
   const beschikbaar = taken.filter(t => {
+    if (t.verwijderd || t.afgerond) return false; // niet tonen
     if (planning[t.id] !== undefined) return false; // al in dag
     if (thema && t.thema !== thema) return false;
     if (periode && t.periode !== periode) return false;
@@ -623,6 +635,11 @@ function renderAlles() {
 function wisselTab(naam) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === naam));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + naam));
+  // Herrender relevante tab zodat data altijd actueel is
+  if (naam === 'dag') renderDag();
+  if (naam === 'master') renderMaster();
+  if (naam === 'matrix') renderMatrix();
+  if (naam === 'archief') renderArchief();
 }
 
 // ===== INIT =====

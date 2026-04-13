@@ -310,7 +310,33 @@ header h1 {
   color: var(--text-muted);
 }
 
-.badge-afgerond { background: #dcfce7; color: #166534; }
+.badge-afgerond   { background: #dcfce7; color: #166534; }
+.badge-verwijderd { background: #fee2e2; color: #991b1b; }
+
+/* Tijdstip blok in dag-kaart */
+.task-tijdstip {
+  min-width: 44px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 6px;
+  padding: 2px 6px;
+  text-align: center;
+  align-self: center;
+  white-space: nowrap;
+}
+
+/* Verwijderde taak in archief */
+.task-card.archief-verwijderd {
+  opacity: 0.45;
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+.task-card.archief-verwijderd .task-omschrijving {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
 
 /* ===== MASTER LIJST ===== */
 .master-toolbar {
