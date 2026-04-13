@@ -338,6 +338,90 @@ header h1 {
   color: var(--text-muted);
 }
 
+/* ===== CLAUDE SUGGESTIES BOX ===== */
+.claude-box {
+  margin-top: 20px;
+  border: 1px solid #c7d2fe;
+  border-radius: var(--radius);
+  background: #f5f3ff;
+  overflow: hidden;
+}
+
+.claude-box-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  background: #ede9fe;
+  border-bottom: 1px solid #c7d2fe;
+}
+
+.claude-box-header:hover { background: #ddd6fe; }
+
+.claude-box-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4c1d95;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.claude-icon { font-size: 15px; }
+
+#claude-box-toggle { font-size: 14px; color: #7c3aed; }
+
+.claude-box-body { padding: 12px 14px; }
+
+.claude-sectie { margin-bottom: 14px; }
+
+.claude-sectie-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.claude-sectie-icon { font-size: 15px; }
+
+.claude-taak {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: white;
+  border: 1px solid #e0d9f7;
+  border-radius: 6px;
+  margin-bottom: 4px;
+}
+
+.claude-taak-naam {
+  font-size: 13px;
+  flex: 1;
+  color: var(--text);
+}
+
+.claude-copy-btn {
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px solid #7c3aed;
+  background: white;
+  color: #7c3aed;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.claude-copy-btn:hover { background: #ede9fe; }
+.claude-copy-btn.gekopieerd { background: #dcfce7; border-color: #16a34a; color: #166534; }
+
+.claude-leeg { font-size: 13px; color: var(--text-muted); padding: 4px 0; }
+
 /* ===== MASTER LIJST ===== */
 .master-toolbar {
   display: flex;

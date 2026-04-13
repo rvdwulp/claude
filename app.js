@@ -173,6 +173,7 @@ function renderDag() {
   document.querySelector('#sectie-tijd .count').textContent = metTijd.length ? `(${metTijd.length})` : '';
   document.querySelector('#sectie-zakelijk .count').textContent = zakelijk.length ? `(${zakelijk.length})` : '';
   document.querySelector('#sectie-prive .count').textContent = prive.length ? `(${prive.length})` : '';
+  renderClaudeSuggesties();
 }
 
 function renderDagLijst(containerId, taken, toonTijd) {
@@ -613,6 +614,103 @@ function snelTaakToevoegen() {
 // Belangrijk = prioriteit 1 t/m 5
 function isUrgent(t)     { return t.periode === 'A'; }
 function isBelangrijk(t) { return t.prio <= 5; }
+
+// ===== CLAUDE SUGGESTIES =====
+let claudeBoxOpen = true;
+
+function toggleClaudeBox() {
+  claudeBoxOpen = !claudeBoxOpen;
+  document.getElementById('claude-box-body').style.display = claudeBoxOpen ? 'block' : 'none';
+  document.getElementById('claude-box-toggle').textContent = claudeBoxOpen ? '▾' : '▸';
+}
+
+function renderClaudeSuggesties() {
+  const body = document.getElementById('claude-box-body');
+  if (!body) return;
+
+  const planning = dagPlanning[huidigeDag] || {};
+  const dagTaken = Object.keys(planning).map(id => {
+    const t = taken.find(t => t.id === id);
+    if (!t || t.verwijderd) return null;
+    return { ...t, dagInfo: planning[id] };
+  }).filter(Boolean).filter(t => !t.dagInfo.gedaan); // alleen open taken
+
+  if (!dagTaken.length) {
+    body.innerHTML = '<p class="claude-leeg">Geen open taken vandaag — niets te suggereren.</p>';
+    return;
+  }
+
+  // Tel hoe vaak een taak al overgenomen is (kijk in dagPlanning history)
+  function aantalDagenOvergenomen(taakId) {
+    return Object.values(dagPlanning).filter(p => p[taakId]?.overgenomen).length;
+  }
+
+  // Categoriseer
+  const chatTaken    = dagTaken.filter(t => t.grootte === 'K' || t.grootte === 'M');
+  const projectTaken = dagTaken.filter(t => t.grootte === 'L' || t.grootte === 'XL');
+  const skillTaken   = dagTaken.filter(t => aantalDagenOvergenomen(t.id) >= 2);
+
+  function taakRegel(t, prompt) {
+    return `<div class="claude-taak">
+      <div class="claude-taak-naam">${escHtml(t.omschrijving)}</div>
+      <button class="claude-copy-btn" onclick="kopieerPrompt(event, \`${prompt.replace(/`/g,"'")}\`)" title="Prompt kopiëren">Kopieer prompt</button>
+    </div>`;
+  }
+
+  function sectie(icon, label, kleur, beschrijving, lijst, promptFn) {
+    if (!lijst.length) return '';
+    return `<div class="claude-sectie">
+      <div class="claude-sectie-header" style="color:${kleur}">
+        <span class="claude-sectie-icon">${icon}</span>
+        <span><strong>${label}</strong> — ${beschrijving}</span>
+      </div>
+      ${lijst.map(t => taakRegel(t, promptFn(t))).join('')}
+    </div>`;
+  }
+
+  body.innerHTML = [
+    sectie('💬', 'Chat',
+      '#2563eb',
+      'Snel afronden via een gesprek',
+      chatTaken,
+      t => `Ik wil je helpen met de volgende actie: "${t.omschrijving}" (thema: ${t.thema}, verwachte tijd: ${t.grootte}). Kun je me helpen dit concreet aan te pakken?`
+    ),
+    sectie('📁', 'Project',
+      '#9333ea',
+      'Zet op als Claude Project voor een langere aanpak',
+      projectTaken,
+      t => `Ik wil een Claude Project aanmaken voor: "${t.omschrijving}" (thema: ${t.thema}). Help me dit op te zetten met een aanpak, deelstappen en relevante context.`
+    ),
+    sectie('⚡', 'Skill',
+      '#d97706',
+      'Staat al meerdere dagen open — overweeg een herbruikbare aanpak',
+      skillTaken,
+      t => `De actie "${t.omschrijving}" komt al meerdere keren terug op mijn lijst. Kun je me helpen hier een skill, template of aanpak voor te maken zodat ik het sneller kan afhandelen?`
+    )
+  ].join('') || '<p class="claude-leeg">Geen specifieke suggesties op basis van de huidige taken.</p>';
+}
+
+function kopieerPrompt(event, tekst) {
+  event.stopPropagation();
+  navigator.clipboard.writeText(tekst).then(() => {
+    const btn = event.target;
+    btn.textContent = 'Gekopieerd!';
+    btn.classList.add('gekopieerd');
+    setTimeout(() => { btn.textContent = 'Kopieer prompt'; btn.classList.remove('gekopieerd'); }, 2000);
+  }).catch(() => {
+    // Fallback voor omgevingen zonder clipboard API
+    const ta = document.createElement('textarea');
+    ta.value = tekst;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    const btn = event.target;
+    btn.textContent = 'Gekopieerd!';
+    setTimeout(() => btn.textContent = 'Kopieer prompt', 2000);
+  });
+}
 
 // ===== HELPERS =====
 function genId() {

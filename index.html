@@ -66,6 +66,17 @@
         <button id="taak-toevoegen-dag" class="primary-btn">+ Taak toevoegen aan dag</button>
         <button id="taken-selecteren" class="secondary-btn">Taken selecteren uit master</button>
       </div>
+
+      <!-- Claude suggesties -->
+      <div class="claude-box" id="claude-box">
+        <div class="claude-box-header" onclick="toggleClaudeBox()">
+          <span class="claude-box-title">
+            <span class="claude-icon">✦</span> Claude suggesties voor vandaag
+          </span>
+          <span id="claude-box-toggle">▾</span>
+        </div>
+        <div class="claude-box-body" id="claude-box-body"></div>
+      </div>
     </div>
 
     <!-- MASTER TAB -->
