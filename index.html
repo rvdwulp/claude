@@ -63,7 +63,8 @@
       </div>
 
       <div class="dag-actions">
-        <button id="taak-toevoegen-dag" class="primary-btn">+ Taak toevoegen aan dag</button>
+        <button id="taak-toevoegen-dag" class="primary-btn">+ Taak toevoegen</button>
+        <button id="snel-toevoegen-btn" class="secondary-btn">⚡ Snel (naam + tijd)</button>
         <button id="taken-selecteren" class="secondary-btn">Taken selecteren uit master</button>
       </div>
 
@@ -204,7 +205,7 @@
           <input type="text" id="taak-omschrijving" placeholder="Wat moet er gedaan worden?" autocomplete="off">
         </div>
         <div class="form-row two-col">
-          <div>
+          <div id="modal-thema-container">
             <label>Thema *</label>
             <select id="taak-thema">
               <option value="IURC">IURC</option>
@@ -225,7 +226,7 @@
             </select>
           </div>
         </div>
-        <div class="form-row two-col">
+        <div class="form-row two-col" id="modal-periode-grootte-row">
           <div>
             <label>Periode</label>
             <select id="taak-periode">
@@ -245,7 +246,7 @@
           </div>
         </div>
         <div class="form-row two-col">
-          <div>
+          <div id="modal-prio-container">
             <label>Prioriteit (1-10)</label>
             <input type="number" id="taak-prio" min="1" max="10" value="5">
           </div>
@@ -254,7 +255,7 @@
             <input type="time" id="taak-tijd">
           </div>
         </div>
-        <div class="form-row">
+        <div class="form-row" id="modal-urgentie-row">
           <label>Urgentie &amp; Belang (automatisch)</label>
           <div class="auto-indicatie" id="auto-indicatie">
             <span id="auto-urgent-badge" class="badge">–</span>
@@ -306,6 +307,30 @@
       <div class="modal-footer">
         <button class="secondary-btn" id="select-modal-annuleren">Annuleren</button>
         <button class="primary-btn" id="select-modal-toevoegen">Toevoegen aan dag</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Snel toevoegen (alleen naam + tijd) -->
+  <div id="snel-modal-overlay" class="modal-overlay hidden">
+    <div class="modal" style="max-width:360px">
+      <div class="modal-header">
+        <h2>Snel toevoegen</h2>
+        <button class="close-btn" id="snel-modal-sluiten">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <label>Onderwerp *</label>
+          <input type="text" id="snel-onderwerp" placeholder="Wat moet er gedaan worden?" autocomplete="off">
+        </div>
+        <div class="form-row">
+          <label>Tijdstip (optioneel)</label>
+          <input type="time" id="snel-tijd">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="secondary-btn" id="snel-modal-annuleren">Annuleren</button>
+        <button class="primary-btn" id="snel-modal-opslaan">Toevoegen aan dag</button>
       </div>
     </div>
   </div>

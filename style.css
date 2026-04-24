@@ -248,6 +248,16 @@ header h1 {
 }
 
 .badge-thema { background: #dbeafe; color: #1d4ed8; }
+
+/* Thema-specifieke kleuren */
+.badge-thema-IURC        { background: #dbeafe; color: #1d4ed8; }
+.badge-thema-AI          { background: #ede9fe; color: #6d28d9; }
+.badge-thema-Innovatie   { background: #dcfce7; color: #15803d; }
+.badge-thema-DHM         { background: #ffedd5; color: #c2410c; }
+.badge-thema-TD          { background: #ccfbf1; color: #0d9488; }
+.badge-thema-EU          { background: #e0e7ff; color: #3730a3; }
+.badge-thema-Presentatie { background: #fce7f3; color: #be185d; }
+.badge-thema-Overig      { background: #f1f5f9; color: #475569; }
 .badge-zakelijk { background: #dbeafe; color: var(--zakelijk); }
 .badge-prive { background: #f3e8ff; color: var(--prive); }
 .badge-A { background: #fee2e2; color: var(--periode-A); }
@@ -290,6 +300,26 @@ header h1 {
 
 .task-action-btn:hover { background: var(--border); }
 
+.task-action-btn[data-tooltip] { position: relative; overflow: visible; }
+.task-action-btn[data-tooltip]::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  color: #fff;
+  padding: 3px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 50;
+}
+.task-action-btn[data-tooltip]:hover::before { opacity: 1; }
+
 /* Drie aparte knoppen met vaste kleur */
 .btn-dag   { color: var(--primary); font-weight: 700; }
 .btn-dag:hover { background: #dbeafe; }
@@ -313,7 +343,7 @@ header h1 {
 .badge-afgerond   { background: #dcfce7; color: #166534; }
 .badge-verwijderd { background: #fee2e2; color: #991b1b; }
 
-/* Tijdstip blok in dag-kaart */
+/* Tijdstip blok in dag-kaart — rechts van de body */
 .task-tijdstip {
   min-width: 44px;
   font-size: 13px;
@@ -321,10 +351,12 @@ header h1 {
   color: #92400e;
   background: #fef3c7;
   border-radius: 6px;
-  padding: 2px 6px;
+  padding: 2px 8px;
   text-align: center;
   align-self: center;
   white-space: nowrap;
+  margin-left: 8px;
+  flex-shrink: 0;
 }
 
 /* Verwijderde taak in archief */

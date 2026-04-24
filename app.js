@@ -152,9 +152,10 @@ function renderDag() {
   }).filter(Boolean);
 
   // Sorteren: tijd eerst, dan prio
-  const metTijd = dagTaken.filter(t => t.dagInfo.tijdstip).sort((a,b) => a.dagInfo.tijdstip.localeCompare(b.dagInfo.tijdstip));
-  const zakelijk = dagTaken.filter(t => !t.dagInfo.tijdstip && t.type === 'zakelijk').sort((a,b) => a.prio - b.prio);
-  const prive = dagTaken.filter(t => !t.dagInfo.tijdstip && t.type === 'prive').sort((a,b) => a.prio - b.prio);
+  const effectiefTijdstip = t => t.dagInfo.tijdstip || t.tijdstip;
+  const metTijd = dagTaken.filter(t => effectiefTijdstip(t)).sort((a,b) => (effectiefTijdstip(a)||'').localeCompare(effectiefTijdstip(b)||''));
+  const zakelijk = dagTaken.filter(t => !effectiefTijdstip(t) && t.type === 'zakelijk').sort((a,b) => a.prio - b.prio);
+  const prive = dagTaken.filter(t => !effectiefTijdstip(t) && t.type === 'prive').sort((a,b) => a.prio - b.prio);
 
   renderDagLijst('lijst-tijd', metTijd, true);
   renderDagLijst('lijst-zakelijk', zakelijk, false);
@@ -186,23 +187,23 @@ function renderDagLijst(containerId, taken, toonTijd) {
     const tijdstip = t.dagInfo.tijdstip || t.tijdstip;
 
     return `<div class="task-card ${gedaan ? 'gedaan' : ''} ${overgenomen ? 'overgenomen' : ''}" data-id="${t.id}">
-      <div class="task-check" onclick="toggleGedaan('${t.id}', event)">${gedaan ? '✓' : ''}</div>
-      ${tijdstip ? `<div class="task-tijdstip">${tijdstip}</div>` : ''}
+      <div class="task-check" onclick="toggleGedaan('${t.id}', event)">${gedaan ? '&#x2713;' : ''}</div>
       <div class="task-body">
         <div class="task-omschrijving">${escHtml(t.omschrijving)}</div>
         <div class="task-meta">
-          <span class="badge badge-thema">${t.thema}</span>
+          <span class="badge badge-thema-${t.thema}">${t.thema}</span>
           <span class="badge badge-${t.type}">${t.type === 'zakelijk' ? 'Zakelijk' : 'Privé'}</span>
-          <span class="badge badge-${t.periode}">${t.periode}</span>
-          <span class="badge badge-grootte">${t.grootte}</span>
-          <span class="badge badge-prio">P${t.prio}</span>
+          ${t.periode ? `<span class="badge badge-${t.periode}">${t.periode}</span>` : ''}
+          ${t.grootte ? `<span class="badge badge-grootte">${t.grootte}</span>` : ''}
+          ${t.prio ? `<span class="badge badge-prio">P${t.prio}</span>` : ''}
           ${isUrgent(t) ? '<span class="badge badge-urgent">Urgent</span>' : ''}
           ${overgenomen ? '<span class="badge" style="background:#fef3c7;color:#92400e">Overgenomen</span>' : ''}
         </div>
       </div>
+      ${tijdstip ? `<div class="task-tijdstip">${tijdstip}</div>` : ''}
       <div class="task-actions">
-        <button class="task-action-btn" onclick="openTijdstipModal('${t.id}', event)" title="Tijdstip">⏰</button>
-        <button class="task-action-btn" onclick="verwijderUitDag('${t.id}', event)" title="Verwijder uit dag">✕</button>
+        <button class="task-action-btn" onclick="openTijdstipModal('${t.id}', event)" data-tooltip="Tijdstip instellen">&#128336;</button>
+        <button class="task-action-btn" onclick="verwijderUitDag('${t.id}', event)" data-tooltip="Verwijder uit dag">&#x2715;</button>
       </div>
     </div>`;
   }).join('');
@@ -304,11 +305,11 @@ function renderMasterKaart(t) {
       </div>
     </div>
     <div class="task-actions">
-      ${!afgerond ? `<button class="task-action-btn btn-dag" onclick="voegToeAanVandaag('${t.id}', event)" title="Aan vandaag toevoegen">+</button>` : ''}
-      <button class="task-action-btn btn-gedaan" onclick="toggleMasterAfgerond('${t.id}', event)" title="${afgerond ? 'Heropen' : 'Markeer als gedaan'}">
-        ${afgerond ? '↩' : '✓'}
+      ${!afgerond ? `<button class="task-action-btn btn-dag" onclick="voegToeAanVandaag('${t.id}', event)" data-tooltip="Aan vandaag toevoegen">+</button>` : ''}
+      <button class="task-action-btn btn-gedaan" onclick="toggleMasterAfgerond('${t.id}', event)" data-tooltip="${afgerond ? 'Heropen taak' : 'Markeer als gedaan'}">
+        ${afgerond ? '&#x21A9;' : '&#x2713;'}
       </button>
-      <button class="task-action-btn btn-delete" onclick="verwijderTaak('${t.id}', event)" title="Verwijderen">🗑</button>
+      <button class="task-action-btn btn-delete" onclick="verwijderTaak('${t.id}', event)" data-tooltip="Verwijderen">&#x1F5D1;</button>
     </div>
   </div>`;
 }
@@ -361,7 +362,7 @@ function renderMatrix() {
             <div class="task-body">
               <div class="task-omschrijving" style="font-size:12px">${escHtml(t.omschrijving)}</div>
               <div class="task-meta">
-                <span class="badge badge-thema" style="font-size:10px">${t.thema}</span>
+                <span class="badge badge-thema-${t.thema}" style="font-size:10px">${t.thema}</span>
                 <span class="badge badge-${t.periode}" style="font-size:10px">${t.periode}</span>
                 <span class="badge badge-prio" style="font-size:10px">P${t.prio}</span>
               </div>
@@ -422,7 +423,7 @@ function renderArchief() {
           <div class="task-body">
             <div class="task-omschrijving">${escHtml(t.omschrijving)}</div>
             <div class="task-meta">
-              <span class="badge badge-thema">${t.thema}</span>
+              <span class="badge badge-thema-${t.thema}">${t.thema}</span>
               <span class="badge badge-${t.type}">${t.type === 'zakelijk' ? 'Zakelijk' : 'Privé'}</span>
               <span class="badge badge-${t.periode}">${t.periode}</span>
               ${isVerwijderd ? '<span class="badge badge-verwijderd">Verwijderd</span>' : ''}
@@ -449,6 +450,14 @@ function updateAutoIndicatie() {
   bb.className = 'badge ' + (belangrijk ? 'badge-A' : 'badge-grootte');
 }
 
+function togglePriveVelden() {
+  const isPrive = document.getElementById('taak-type').value === 'prive';
+  document.getElementById('modal-thema-container').style.display = isPrive ? 'none' : '';
+  document.getElementById('modal-periode-grootte-row').style.display = isPrive ? 'none' : '';
+  document.getElementById('modal-prio-container').style.display = isPrive ? 'none' : '';
+  document.getElementById('modal-urgentie-row').style.display = isPrive ? 'none' : '';
+}
+
 function openNieuweTaakModal() {
   bewerkTaakId = null;
   document.getElementById('modal-titel').textContent = 'Nieuwe taak';
@@ -461,6 +470,7 @@ function openNieuweTaakModal() {
   document.getElementById('taak-tijd').value = '';
   document.getElementById('taak-notities').value = '';
   updateAutoIndicatie();
+  togglePriveVelden();
   document.getElementById('modal-overlay').classList.remove('hidden');
   document.getElementById('taak-omschrijving').focus();
 }
@@ -471,14 +481,15 @@ function bewerkTaak(taakId) {
   bewerkTaakId = taakId;
   document.getElementById('modal-titel').textContent = 'Taak bewerken';
   document.getElementById('taak-omschrijving').value = t.omschrijving;
-  document.getElementById('taak-thema').value = t.thema;
+  document.getElementById('taak-thema').value = t.thema || 'Overig';
   document.getElementById('taak-type').value = t.type;
-  document.getElementById('taak-periode').value = t.periode;
-  document.getElementById('taak-grootte').value = t.grootte;
-  document.getElementById('taak-prio').value = t.prio;
+  document.getElementById('taak-periode').value = t.periode || 'B';
+  document.getElementById('taak-grootte').value = t.grootte || 'M';
+  document.getElementById('taak-prio').value = t.prio || 5;
   document.getElementById('taak-tijd').value = t.tijdstip || '';
   document.getElementById('taak-notities').value = t.notities || '';
   updateAutoIndicatie();
+  togglePriveVelden();
   document.getElementById('modal-overlay').classList.remove('hidden');
   document.getElementById('taak-omschrijving').focus();
 }
@@ -488,16 +499,17 @@ function slaModalOp() {
   if (!omschrijving) { document.getElementById('taak-omschrijving').focus(); return; }
 
   const oud = bewerkTaakId ? taken.find(t => t.id === bewerkTaakId) : null;
-  const periode = document.getElementById('taak-periode').value;
-  const prio = parseInt(document.getElementById('taak-prio').value) || 5;
+  const isPrive = document.getElementById('taak-type').value === 'prive';
+  const periode = isPrive ? (oud?.periode || 'B') : document.getElementById('taak-periode').value;
+  const prio = isPrive ? (oud?.prio || 5) : (parseInt(document.getElementById('taak-prio').value) || 5);
 
   const taak = {
     id: bewerkTaakId || genId(),
     omschrijving,
-    thema: document.getElementById('taak-thema').value,
+    thema: isPrive ? (oud?.thema || 'Overig') : document.getElementById('taak-thema').value,
     type: document.getElementById('taak-type').value,
     periode,
-    grootte: document.getElementById('taak-grootte').value,
+    grootte: isPrive ? (oud?.grootte || 'M') : document.getElementById('taak-grootte').value,
     prio,
     tijdstip: document.getElementById('taak-tijd').value || null,
     notities: document.getElementById('taak-notities').value.trim(),
@@ -562,7 +574,7 @@ function renderSelecteerLijst() {
       <div style="flex:1">
         <div style="font-weight:500;font-size:13px">${escHtml(t.omschrijving)}</div>
         <div class="task-meta" style="margin-top:3px">
-          <span class="badge badge-thema">${t.thema}</span>
+          <span class="badge badge-thema-${t.thema}">${t.thema}</span>
           <span class="badge badge-${t.periode}">${t.periode}</span>
           <span class="badge badge-grootte">${t.grootte}</span>
           <span class="badge badge-prio">P${t.prio}</span>
@@ -605,8 +617,48 @@ function snelTaakToevoegen() {
   document.getElementById('taak-tijd').value = '';
   document.getElementById('taak-notities').value = '';
   updateAutoIndicatie();
+  togglePriveVelden();
   document.getElementById('modal-overlay').classList.remove('hidden');
   document.getElementById('taak-omschrijving').focus();
+}
+
+// ===== SNEL TOEVOEGEN (alleen naam + tijd) =====
+function openSnelModal() {
+  document.getElementById('snel-onderwerp').value = '';
+  document.getElementById('snel-tijd').value = '';
+  document.getElementById('snel-modal-overlay').classList.remove('hidden');
+  document.getElementById('snel-onderwerp').focus();
+}
+
+function slaSnelModalOp() {
+  const omschrijving = document.getElementById('snel-onderwerp').value.trim();
+  if (!omschrijving) { document.getElementById('snel-onderwerp').focus(); return; }
+  const tijdstip = document.getElementById('snel-tijd').value || null;
+
+  const taak = {
+    id: genId(),
+    omschrijving,
+    thema: 'Overig',
+    type: 'zakelijk',
+    periode: 'A',
+    grootte: 'K',
+    prio: 5,
+    tijdstip,
+    notities: '',
+    afgerond: false,
+    afgerondDatum: null,
+    aangemaakt: new Date().toISOString()
+  };
+  taken.push(taak);
+  if (!dagPlanning[huidigeDag]) dagPlanning[huidigeDag] = {};
+  dagPlanning[huidigeDag][taak.id] = { gedaan: false, overgenomen: false, tijdstip };
+  document.getElementById('snel-modal-overlay').classList.add('hidden');
+  slaData();
+  renderDag();
+}
+
+function sluitSnelModal() {
+  document.getElementById('snel-modal-overlay').classList.add('hidden');
 }
 
 // ===== URGENT / BELANGRIJK (automatisch) =====
@@ -732,8 +784,10 @@ function renderAlles() {
 function wisselTab(naam) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === naam));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + naam));
-  // Herrender relevante tab zodat data altijd actueel is
-  if (naam === 'dag') renderDag();
+  if (naam === 'dag') {
+    if (db) laadVanFirebase().catch(() => renderDag());
+    else renderDag();
+  }
   if (naam === 'master') renderMaster();
   if (naam === 'matrix') renderMatrix();
   if (naam === 'archief') renderArchief();
@@ -788,6 +842,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('taak-periode').addEventListener('change', updateAutoIndicatie);
   document.getElementById('taak-prio').addEventListener('input', updateAutoIndicatie);
 
+  // Privé: verberg overige velden
+  document.getElementById('taak-type').addEventListener('change', togglePriveVelden);
+
   // Modal opslaan/sluiten
   document.getElementById('modal-opslaan').addEventListener('click', slaModalOp);
   document.getElementById('modal-sluiten').addEventListener('click', sluitModal);
@@ -796,6 +853,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Enter in modal
   document.getElementById('taak-omschrijving').addEventListener('keydown', e => { if (e.key === 'Enter') slaModalOp(); });
+
+  // Snel toevoegen modal
+  document.getElementById('snel-toevoegen-btn').addEventListener('click', openSnelModal);
+  document.getElementById('snel-modal-opslaan').addEventListener('click', slaSnelModalOp);
+  document.getElementById('snel-modal-sluiten').addEventListener('click', sluitSnelModal);
+  document.getElementById('snel-modal-annuleren').addEventListener('click', sluitSnelModal);
+  document.getElementById('snel-modal-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) sluitSnelModal(); });
+  document.getElementById('snel-onderwerp').addEventListener('keydown', e => { if (e.key === 'Enter') slaSnelModalOp(); });
 
   // Selecteer modal
   document.getElementById('select-modal-sluiten').addEventListener('click', () => {
