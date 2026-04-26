@@ -760,6 +760,26 @@ function sluitSnelModal() {
 function isUrgent(t)     { return t.periode === 'A'; }
 function isBelangrijk(t) { return t.prio <= 5; }
 
+// ===== EXPORT =====
+function exporteerData() {
+  const exportData = {
+    exportDatum: new Date().toISOString(),
+    versie: '1.0',
+    taken: taken,
+    dagPlanning: dagPlanning
+  };
+  const json = JSON.stringify(exportData, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `actielijst-export-${vandaagStr()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // ===== HELPERS =====
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2,7);
@@ -821,6 +841,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Master nieuw
   document.getElementById('nieuwe-taak-btn').addEventListener('click', openNieuweTaakModal);
+  document.getElementById('export-btn').addEventListener('click', exporteerData);
 
   // Master filters
   ['filter-thema','filter-periode','filter-grootte','filter-type','filter-prio','filter-status'].forEach(id => {
