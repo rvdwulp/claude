@@ -123,6 +123,7 @@ function carryForward() {
 
   let overgenomen = 0;
   for (const [taakId, info] of Object.entries(vorigePlanning)) {
+    if (taakId.startsWith('__')) continue; // interne sleutels (volgorde, etc.) overslaan
     if (!info.gedaan && !dagPlanning[vandaag][taakId]) {
       dagPlanning[vandaag][taakId] = { gedaan: false, overgenomen: true };
       overgenomen++;
@@ -148,8 +149,9 @@ function renderDag() {
 
   const planning = dagPlanning[huidigeDag] || {};
   const dagTaken = Object.keys(planning).map(id => {
+    if (id.startsWith('__')) return null;
     const taak = taken.find(t => t.id === id);
-    if (!taak || taak.verwijderd) return null; // verwijderde taken niet tonen in dag
+    if (!taak || taak.verwijderd) return null;
     return { ...taak, dagInfo: planning[id] };
   }).filter(Boolean);
 
@@ -388,9 +390,9 @@ function renderMasterKaart(t) {
       <div class="task-omschrijving">${escHtml(t.omschrijving)}</div>
       <div class="task-meta">
         <span class="badge badge-${t.type}">${t.type === 'zakelijk' ? 'Zakelijk' : 'Privé'}</span>
-        <span class="badge badge-${t.periode}">${t.periode}</span>
-        <span class="badge badge-grootte">${t.grootte}</span>
-        <span class="badge badge-prio">P${t.prio}</span>
+        ${t.periode ? `<span class="badge badge-${t.periode}">${t.periode}</span>` : ''}
+        ${t.grootte ? `<span class="badge badge-grootte">${t.grootte}</span>` : ''}
+        ${t.prio ? `<span class="badge badge-prio">P${t.prio}</span>` : ''}
         ${urgent ? '<span class="badge badge-urgent">Urgent</span>' : ''}
         ${!belangrijk ? '<span class="badge badge-grootte">Niet belangrijk</span>' : ''}
         ${afgerond ? `<span class="badge badge-afgerond">Afgerond${t.afgerondDatum ? ' ' + t.afgerondDatum.slice(5,10).replace('-','/') : ''}</span>` : ''}
@@ -487,6 +489,7 @@ function renderArchief() {
   container.innerHTML = gefilterdeDagen.map(dag => {
     const planning = dagPlanning[dag];
     let dagTaken = Object.keys(planning).map(id => {
+      if (id.startsWith('__')) return null;
       const taak = taken.find(t => t.id === id);
       if (!taak) return null;
       if (themaFilter && taak.thema !== themaFilter) return null;
