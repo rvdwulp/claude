@@ -39,7 +39,6 @@
       <div class="dag-stats">
         <span id="stat-gedaan">0 gedaan</span>
         <span id="stat-open">0 open</span>
-        <span id="stat-tijd">0 overgenomen</span>
       </div>
 
       <div class="dag-sections">
@@ -68,16 +67,6 @@
         <button id="taken-selecteren" class="secondary-btn">Taken selecteren uit master</button>
       </div>
 
-      <!-- Claude suggesties -->
-      <div class="claude-box" id="claude-box">
-        <div class="claude-box-header" onclick="toggleClaudeBox()">
-          <span class="claude-box-title">
-            <span class="claude-icon">✦</span> Claude suggesties voor vandaag
-          </span>
-          <span id="claude-box-toggle">▾</span>
-        </div>
-        <div class="claude-box-body" id="claude-box-body"></div>
-      </div>
     </div>
 
     <!-- MASTER TAB -->
@@ -133,7 +122,20 @@
           </select>
           <button id="filter-reset" class="reset-btn">✕ Reset</button>
         </div>
-        <button id="nieuwe-taak-btn" class="primary-btn">+ Nieuwe taak</button>
+        <div class="filter-row sort-row">
+          <label style="font-size:12px;font-weight:600;color:#64748b">Sorteren op:</label>
+          <select id="master-sortering" class="filter-select">
+            <option value="thema">Thema (standaard)</option>
+            <option value="prio">Prioriteit</option>
+            <option value="periode">Periode</option>
+            <option value="type">Type</option>
+            <option value="aangemaakt">Aangemaakt</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="nieuwe-taak-btn" class="primary-btn">+ Nieuwe taak</button>
+          <button id="export-btn" class="secondary-btn" title="Exporteer alle taken">&#128229; Exporteer</button>
+        </div>
       </div>
 
       <div id="master-lijst" class="master-list"></div>

@@ -14,6 +14,8 @@ let dagPlanning = {};  // { 'YYYY-MM-DD': { taakId: { gedaan, overgenomen, tijds
 let huidigeDag = vandaagStr();
 let bewerkTaakId = null;
 let geselecteerdVoorDag = new Set();
+let dragSrcId = null;
+let dragSrcSectie = null;
 
 function vandaagStr() {
   return new Date().toISOString().slice(0,10);
@@ -154,39 +156,67 @@ function renderDag() {
   // Sorteren: tijd eerst, dan prio
   const effectiefTijdstip = t => t.dagInfo.tijdstip || t.tijdstip;
   const metTijd = dagTaken.filter(t => effectiefTijdstip(t)).sort((a,b) => (effectiefTijdstip(a)||'').localeCompare(effectiefTijdstip(b)||''));
-  const zakelijk = dagTaken.filter(t => !effectiefTijdstip(t) && t.type === 'zakelijk').sort((a,b) => a.prio - b.prio);
-  const prive = dagTaken.filter(t => !effectiefTijdstip(t) && t.type === 'prive').sort((a,b) => a.prio - b.prio);
+  const zakelijk = dagTaken.filter(t => !effectiefTijdstip(t) && t.type === 'zakelijk')
+    .sort((a,b) => (a.thema||'').localeCompare(b.thema||'') || (a.prio||5) - (b.prio||5));
+  const prive = dagTaken.filter(t => !effectiefTijdstip(t) && t.type === 'prive')
+    .sort((a,b) => (a.thema||'').localeCompare(b.thema||'') || (a.prio||5) - (b.prio||5));
 
-  renderDagLijst('lijst-tijd', metTijd, true);
-  renderDagLijst('lijst-zakelijk', zakelijk, false);
-  renderDagLijst('lijst-prive', prive, false);
+  renderDagLijst('lijst-tijd', metTijd, 'tijd');
+  renderDagLijst('lijst-zakelijk', zakelijk, 'zakelijk');
+  renderDagLijst('lijst-prive', prive, 'prive');
 
   document.getElementById('sectie-tijd').style.display = metTijd.length ? 'block' : 'none';
 
   // Stats
   const gedaan = dagTaken.filter(t => t.dagInfo.gedaan).length;
-  const overgenomen = dagTaken.filter(t => t.dagInfo.overgenomen).length;
   document.getElementById('stat-gedaan').textContent = `${gedaan} gedaan`;
   document.getElementById('stat-open').textContent = `${dagTaken.length - gedaan} open`;
-  document.getElementById('stat-tijd').textContent = `${overgenomen} overgenomen`;
 
   // Counts
   document.querySelector('#sectie-tijd .count').textContent = metTijd.length ? `(${metTijd.length})` : '';
   document.querySelector('#sectie-zakelijk .count').textContent = zakelijk.length ? `(${zakelijk.length})` : '';
   document.querySelector('#sectie-prive .count').textContent = prive.length ? `(${prive.length})` : '';
-  renderClaudeSuggesties();
 }
 
-function renderDagLijst(containerId, taken, toonTijd) {
+function renderDagLijst(containerId, taken, sectieNaam) {
   const el = document.getElementById(containerId);
   if (!taken.length) { el.innerHTML = '<div class="empty-state" style="padding:10px;font-size:12px">Geen taken</div>'; return; }
 
-  el.innerHTML = taken.map(t => {
+  const customOrder = dagPlanning[huidigeDag]?.__order?.[sectieNaam] || [];
+
+  const actief = taken.filter(t => !t.dagInfo.gedaan);
+  const afgevinkt = taken.filter(t => t.dagInfo.gedaan);
+
+  function sortActief(lijst) {
+    if (customOrder.length) {
+      return [...lijst].sort((a, b) => {
+        const ai = customOrder.indexOf(a.id);
+        const bi = customOrder.indexOf(b.id);
+        return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
+      });
+    }
+    if (sectieNaam === 'tijd') return lijst; // already sorted by time
+    return [...lijst].sort((a,b) => (a.thema||'').localeCompare(b.thema||'') || (a.prio||5) - (b.prio||5));
+  }
+
+  function sortAfgevinkt(lijst) {
+    return [...lijst].sort((a,b) => (a.thema||'').localeCompare(b.thema||'') || (a.prio||5) - (b.prio||5));
+  }
+
+  const gesorteerd = [...sortActief(actief), ...sortAfgevinkt(afgevinkt)];
+
+  el.innerHTML = gesorteerd.map(t => {
     const gedaan = t.dagInfo.gedaan;
     const overgenomen = t.dagInfo.overgenomen;
     const tijdstip = t.dagInfo.tijdstip || t.tijdstip;
 
-    return `<div class="task-card ${gedaan ? 'gedaan' : ''} ${overgenomen ? 'overgenomen' : ''}" data-id="${t.id}">
+    return `<div class="task-card ${gedaan ? 'gedaan' : ''} ${overgenomen ? 'overgenomen' : ''}"
+      data-id="${t.id}" draggable="${!gedaan}"
+      ondragstart="onDagDragStart(event,'${t.id}','${sectieNaam}')"
+      ondragover="onDagDragOver(event)"
+      ondrop="onDagDrop(event,'${t.id}','${sectieNaam}')"
+      ondragend="onDagDragEnd(event)">
+      <div class="drag-handle" title="Verslepen">&#8597;</div>
       <div class="task-check" onclick="toggleGedaan('${t.id}', event)">${gedaan ? '&#x2713;' : ''}</div>
       <div class="task-body">
         <div class="task-omschrijving">${escHtml(t.omschrijving)}</div>
@@ -207,6 +237,53 @@ function renderDagLijst(containerId, taken, toonTijd) {
       </div>
     </div>`;
   }).join('');
+}
+
+function onDagDragStart(event, taakId, sectie) {
+  dragSrcId = taakId;
+  dragSrcSectie = sectie;
+  event.dataTransfer.effectAllowed = 'move';
+  event.currentTarget.classList.add('dragging');
+}
+
+function onDagDragOver(event) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  event.currentTarget.classList.add('drag-over');
+}
+
+function onDagDrop(event, targetId, sectie) {
+  event.preventDefault();
+  event.currentTarget.classList.remove('drag-over');
+  if (!dragSrcId || dragSrcId === targetId || dragSrcSectie !== sectie) return;
+
+  const planning = dagPlanning[huidigeDag];
+  if (!planning) return;
+
+  // Build current order from DOM
+  const el = event.currentTarget.closest('.task-list');
+  const ids = [...el.querySelectorAll('.task-card:not(.gedaan)')].map(c => c.dataset.id);
+
+  const fromIdx = ids.indexOf(dragSrcId);
+  const toIdx = ids.indexOf(targetId);
+  if (fromIdx === -1 || toIdx === -1) return;
+
+  ids.splice(fromIdx, 1);
+  ids.splice(toIdx, 0, dragSrcId);
+
+  if (!planning.__order) planning.__order = {};
+  planning.__order[sectie] = ids;
+
+  dragSrcId = null;
+  dragSrcSectie = null;
+  slaData();
+  renderDag();
+}
+
+function onDagDragEnd(event) {
+  event.currentTarget.classList.remove('dragging', 'drag-over');
+  document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+  dragSrcId = null;
 }
 
 function toggleGedaan(taakId, event) {
@@ -268,22 +345,38 @@ function renderMaster() {
     return;
   }
 
-  const perThema = {};
-  for (const t of themas) perThema[t] = [];
-  for (const t of gefilterd) {
-    if (!perThema[t.thema]) perThema[t.thema] = [];
-    perThema[t.thema].push(t);
-  }
+  const sortering = document.getElementById('master-sortering')?.value || 'thema';
 
-  container.innerHTML = themas.map(t => {
-    const lijst = perThema[t];
-    if (!lijst.length) return '';
-    const gesorteerd = lijst.sort((a,b) => a.prio - b.prio);
-    return `<div class="thema-groep">
-      <div class="thema-header">${t} <span class="thema-count">${lijst.length} taken</span></div>
+  if (sortering === 'thema') {
+    const perThema = {};
+    for (const t of themas) perThema[t] = [];
+    for (const t of gefilterd) {
+      if (!perThema[t.thema]) perThema[t.thema] = [];
+      perThema[t.thema].push(t);
+    }
+
+    container.innerHTML = themas.map(t => {
+      const lijst = perThema[t];
+      if (!lijst.length) return '';
+      const gesorteerd = lijst.sort((a,b) => a.prio - b.prio);
+      return `<div class="thema-groep">
+        <div class="thema-header thema-header-${t}">${t} <span class="thema-count">${lijst.length} taken</span></div>
+        ${gesorteerd.map(taak => renderMasterKaart(taak)).join('')}
+      </div>`;
+    }).join('');
+  } else {
+    // flat sort
+    let gesorteerd;
+    if (sortering === 'prio') gesorteerd = gefilterd.sort((a,b) => (a.prio||5) - (b.prio||5));
+    else if (sortering === 'periode') gesorteerd = gefilterd.sort((a,b) => (a.periode||'').localeCompare(b.periode||''));
+    else if (sortering === 'type') gesorteerd = gefilterd.sort((a,b) => (a.type||'').localeCompare(b.type||''));
+    else if (sortering === 'aangemaakt') gesorteerd = gefilterd.sort((a,b) => (b.aangemaakt||'').localeCompare(a.aangemaakt||''));
+    container.innerHTML = `<div class="thema-groep">
+      <div class="thema-header">Gesorteerd op: ${sortering}</div>
       ${gesorteerd.map(taak => renderMasterKaart(taak)).join('')}
     </div>`;
-  }).join('');
+    return;
+  }
 }
 
 function renderMasterKaart(t) {
@@ -667,103 +760,6 @@ function sluitSnelModal() {
 function isUrgent(t)     { return t.periode === 'A'; }
 function isBelangrijk(t) { return t.prio <= 5; }
 
-// ===== CLAUDE SUGGESTIES =====
-let claudeBoxOpen = true;
-
-function toggleClaudeBox() {
-  claudeBoxOpen = !claudeBoxOpen;
-  document.getElementById('claude-box-body').style.display = claudeBoxOpen ? 'block' : 'none';
-  document.getElementById('claude-box-toggle').textContent = claudeBoxOpen ? '▾' : '▸';
-}
-
-function renderClaudeSuggesties() {
-  const body = document.getElementById('claude-box-body');
-  if (!body) return;
-
-  const planning = dagPlanning[huidigeDag] || {};
-  const dagTaken = Object.keys(planning).map(id => {
-    const t = taken.find(t => t.id === id);
-    if (!t || t.verwijderd) return null;
-    return { ...t, dagInfo: planning[id] };
-  }).filter(Boolean).filter(t => !t.dagInfo.gedaan); // alleen open taken
-
-  if (!dagTaken.length) {
-    body.innerHTML = '<p class="claude-leeg">Geen open taken vandaag — niets te suggereren.</p>';
-    return;
-  }
-
-  // Tel hoe vaak een taak al overgenomen is (kijk in dagPlanning history)
-  function aantalDagenOvergenomen(taakId) {
-    return Object.values(dagPlanning).filter(p => p[taakId]?.overgenomen).length;
-  }
-
-  // Categoriseer
-  const chatTaken    = dagTaken.filter(t => t.grootte === 'K' || t.grootte === 'M');
-  const projectTaken = dagTaken.filter(t => t.grootte === 'L' || t.grootte === 'XL');
-  const skillTaken   = dagTaken.filter(t => aantalDagenOvergenomen(t.id) >= 2);
-
-  function taakRegel(t, prompt) {
-    return `<div class="claude-taak">
-      <div class="claude-taak-naam">${escHtml(t.omschrijving)}</div>
-      <button class="claude-copy-btn" onclick="kopieerPrompt(event, \`${prompt.replace(/`/g,"'")}\`)" title="Prompt kopiëren">Kopieer prompt</button>
-    </div>`;
-  }
-
-  function sectie(icon, label, kleur, beschrijving, lijst, promptFn) {
-    if (!lijst.length) return '';
-    return `<div class="claude-sectie">
-      <div class="claude-sectie-header" style="color:${kleur}">
-        <span class="claude-sectie-icon">${icon}</span>
-        <span><strong>${label}</strong> — ${beschrijving}</span>
-      </div>
-      ${lijst.map(t => taakRegel(t, promptFn(t))).join('')}
-    </div>`;
-  }
-
-  body.innerHTML = [
-    sectie('💬', 'Chat',
-      '#2563eb',
-      'Snel afronden via een gesprek',
-      chatTaken,
-      t => `Ik wil je helpen met de volgende actie: "${t.omschrijving}" (thema: ${t.thema}, verwachte tijd: ${t.grootte}). Kun je me helpen dit concreet aan te pakken?`
-    ),
-    sectie('📁', 'Project',
-      '#9333ea',
-      'Zet op als Claude Project voor een langere aanpak',
-      projectTaken,
-      t => `Ik wil een Claude Project aanmaken voor: "${t.omschrijving}" (thema: ${t.thema}). Help me dit op te zetten met een aanpak, deelstappen en relevante context.`
-    ),
-    sectie('⚡', 'Skill',
-      '#d97706',
-      'Staat al meerdere dagen open — overweeg een herbruikbare aanpak',
-      skillTaken,
-      t => `De actie "${t.omschrijving}" komt al meerdere keren terug op mijn lijst. Kun je me helpen hier een skill, template of aanpak voor te maken zodat ik het sneller kan afhandelen?`
-    )
-  ].join('') || '<p class="claude-leeg">Geen specifieke suggesties op basis van de huidige taken.</p>';
-}
-
-function kopieerPrompt(event, tekst) {
-  event.stopPropagation();
-  navigator.clipboard.writeText(tekst).then(() => {
-    const btn = event.target;
-    btn.textContent = 'Gekopieerd!';
-    btn.classList.add('gekopieerd');
-    setTimeout(() => { btn.textContent = 'Kopieer prompt'; btn.classList.remove('gekopieerd'); }, 2000);
-  }).catch(() => {
-    // Fallback voor omgevingen zonder clipboard API
-    const ta = document.createElement('textarea');
-    ta.value = tekst;
-    ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    const btn = event.target;
-    btn.textContent = 'Gekopieerd!';
-    setTimeout(() => btn.textContent = 'Kopieer prompt', 2000);
-  });
-}
-
 // ===== HELPERS =====
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2,7);
@@ -805,13 +801,13 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => wisselTab(btn.dataset.tab));
   });
 
-  // Dag navigatie (skip weekends)
+  // Dag navigatie (alle dagen)
   document.getElementById('prev-dag').addEventListener('click', () => {
-    huidigeDag = werkdagStap(-1, huidigeDag);
+    huidigeDag = datumOffset(-1, huidigeDag);
     renderDag();
   });
   document.getElementById('next-dag').addEventListener('click', () => {
-    huidigeDag = werkdagStap(1, huidigeDag);
+    huidigeDag = datumOffset(1, huidigeDag);
     renderDag();
   });
   document.getElementById('naar-vandaag').addEventListener('click', () => {
@@ -830,11 +826,13 @@ document.addEventListener('DOMContentLoaded', () => {
   ['filter-thema','filter-periode','filter-grootte','filter-type','filter-prio','filter-status'].forEach(id => {
     document.getElementById(id).addEventListener('change', renderMaster);
   });
+  document.getElementById('master-sortering').addEventListener('change', renderMaster);
   document.getElementById('filter-reset').addEventListener('click', () => {
     ['filter-thema','filter-periode','filter-grootte','filter-type','filter-prio'].forEach(id => {
       document.getElementById(id).value = '';
     });
     document.getElementById('filter-status').value = 'actief';
+    document.getElementById('master-sortering').value = 'thema';
     renderMaster();
   });
 
