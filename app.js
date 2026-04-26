@@ -17,8 +17,12 @@ let geselecteerdVoorDag = new Set();
 let dragSrcId = null;
 let dragSrcSectie = null;
 
+function localDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
 function vandaagStr() {
-  return new Date().toISOString().slice(0,10);
+  return localDateStr(new Date());
 }
 
 function laadData() {
@@ -86,10 +90,9 @@ async function laadVanFirebase() {
 
 // ===== DATUM HELPERS =====
 function datumOffset(dagen, vanafStr) {
-  // Gewone kalender offset (geen weekend-skip), gebruikt voor archief/vergelijken
   const d = new Date(vanafStr + 'T00:00:00');
   d.setDate(d.getDate() + dagen);
-  return d.toISOString().slice(0,10);
+  return localDateStr(d);
 }
 
 function isWeekend(str) {
@@ -98,12 +101,11 @@ function isWeekend(str) {
 }
 
 function werkdagStap(stap, vanafStr) {
-  // Navigeer één werkdag voor- of achteruit, skip zaterdag/zondag
   let d = new Date(vanafStr + 'T00:00:00');
   do {
     d.setDate(d.getDate() + stap);
   } while (d.getDay() === 0 || d.getDay() === 6);
-  return d.toISOString().slice(0,10);
+  return localDateStr(d);
 }
 
 function vorigeWerkdag(vanafStr) {
@@ -190,6 +192,12 @@ function renderDagLijst(containerId, taken, sectieNaam) {
   const afgevinkt = taken.filter(t => t.dagInfo.gedaan);
 
   function sortActief(lijst) {
+    if (sectieNaam === 'tijd') {
+      // Tijdtaken altijd op tijd gesorteerd, nooit door drag-order overschreven
+      return [...lijst].sort((a,b) =>
+        (a.dagInfo.tijdstip || a.tijdstip || '').localeCompare(b.dagInfo.tijdstip || b.tijdstip || '')
+      );
+    }
     if (customOrder.length) {
       return [...lijst].sort((a, b) => {
         const ai = customOrder.indexOf(a.id);
@@ -197,7 +205,6 @@ function renderDagLijst(containerId, taken, sectieNaam) {
         return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
       });
     }
-    if (sectieNaam === 'tijd') return lijst; // already sorted by time
     return [...lijst].sort((a,b) => (a.thema||'').localeCompare(b.thema||'') || (a.prio||5) - (b.prio||5));
   }
 
