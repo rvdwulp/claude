@@ -60,6 +60,7 @@ async function syncServer() {
   } catch(e) {
     syncBtn.textContent = '!';
     syncBtn.className = 'icon-btn error';
+    syncBtn.title = e.message || 'Opslaan mislukt';
     console.error('Opslaan mislukt:', e);
   }
 }
@@ -807,7 +808,7 @@ function renderAlles() {
 function wisselTab(naam) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === naam));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + naam));
-  if (naam === 'dag') laadVanServer().catch(() => renderDag());
+  if (naam === 'dag') renderDag();
   if (naam === 'master') renderMaster();
   if (naam === 'matrix') renderMatrix();
   if (naam === 'archief') renderArchief();

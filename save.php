@@ -13,8 +13,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $bytes = file_put_contents($file, $input, LOCK_EX);
     if ($bytes === false) {
+        $dir_writable = is_writable(__DIR__) ? 'ja' : 'nee';
+        $file_exists = file_exists($file) ? 'ja' : 'nee';
         http_response_code(500);
-        echo json_encode(['status' => 'error', 'message' => 'Schrijven mislukt — controleer schrijfrechten op data.json']);
+        echo json_encode(['status' => 'error', 'message' => "Schrijven mislukt (map schrijfbaar: $dir_writable, bestand bestaat: $file_exists)"]);
     } else {
         echo json_encode(['status' => 'ok']);
     }
