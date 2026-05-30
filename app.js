@@ -26,6 +26,8 @@ function vandaagStr() {
 }
 
 function laadData() {
+  const rawDag = localStorage.getItem('actielijst_dagPlanning');
+  console.log('[LOAD-RAW] actielijst_dagPlanning in localStorage:', rawDag ? rawDag.substring(0, 120) : 'NULL/LEEG');
   taken = Storage.get('actielijst_taken', []);
   dagPlanning = Storage.get('actielijst_dagPlanning', {});
   const dagKeys = dagPlanning[vandaagStr()] ? Object.keys(dagPlanning[vandaagStr()]).filter(k => !k.startsWith('__')) : [];
@@ -37,6 +39,8 @@ function slaData() {
   console.log('[SAVE] taken:', taken.length, '| vandaag in dagPlanning:', dagKeys.length, dagKeys);
   Storage.set('actielijst_taken', taken);
   Storage.set('actielijst_dagPlanning', dagPlanning);
+  const rawDag = localStorage.getItem('actielijst_dagPlanning');
+  console.log('[SAVE-RAW] na schrijven:', rawDag ? rawDag.substring(0, 120) : 'NULL — schrijven mislukt!');
   clearTimeout(syncTimeout);
   syncTimeout = setTimeout(syncServer, 800);
 }
@@ -78,11 +82,11 @@ async function laadVanServer() {
     if (data.heeftData) {
       if (Array.isArray(data.taken)) {
         taken = data.taken;
-        Storage.set('taken', taken);
+        Storage.set('actielijst_taken', taken);
       }
       if (data.dagPlanning && typeof data.dagPlanning === 'object') {
         dagPlanning = data.dagPlanning;
-        Storage.set('dagPlanning', dagPlanning);
+        Storage.set('actielijst_dagPlanning', dagPlanning);
       }
       renderAlles();
     }
