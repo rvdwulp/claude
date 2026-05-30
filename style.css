@@ -733,6 +733,69 @@ header h1 {
   font-size: 14px;
 }
 
+/* ===== STANDAARD DAGACTIES ===== */
+.standaarden-sectie { margin-bottom: 20px; }
+.standaarden-sectie:last-child { margin-bottom: 0; }
+
+.standaarden-sectie-titel {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+}
+
+.standaard-rij {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--surface2);
+}
+.standaard-rij:last-child { border-bottom: none; }
+.standaard-rij .standaard-naam-input { flex: 1; min-width: 0; }
+
+.standaard-nieuw-rij {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 2px dashed var(--border);
+  flex-wrap: wrap;
+}
+
+.standaard-dag-rij {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--surface2);
+}
+.standaard-dag-rij:last-child { border-bottom: none; }
+
+.standaard-dag-label {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--text) !important;
+  cursor: pointer;
+}
+.standaard-dag-label input[type="checkbox"] { width: auto !important; margin: 0; cursor: pointer; flex-shrink: 0; }
+
+.standaard-dag-override { width: 100px; flex-shrink: 0; }
+
+.standaarden-leeg { padding: 12px 0; font-size: 13px; color: var(--text-muted); }
+
 /* ===== TIJDSTIP PICKER ===== */
 .tijdstip-picker { display: flex; flex-direction: column; gap: 8px; }
 

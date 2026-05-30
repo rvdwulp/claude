@@ -65,6 +65,7 @@
         <button id="snel-werk-btn" class="primary-btn">⚡ Snel werk</button>
         <button id="snel-prive-btn" class="primary-btn">⚡ Snel privé</button>
         <button id="taken-selecteren" class="secondary-btn">Taken selecteren uit master</button>
+        <button id="standaarden-btn" class="secondary-btn">☰ Standaarden</button>
       </div>
 
     </div>
@@ -358,6 +359,39 @@
       <div class="modal-footer">
         <button class="secondary-btn" id="snel-modal-annuleren">Annuleren</button>
         <button class="primary-btn" id="snel-modal-opslaan">Toevoegen aan dag</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Standaard dagacties -->
+  <div id="standaarden-modal-overlay" class="modal-overlay hidden">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h2>Standaard dagacties</h2>
+        <button class="close-btn" id="standaarden-sluiten">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <div class="standaarden-sectie">
+          <div class="standaarden-sectie-titel">Beheer standaarden</div>
+          <div id="standaarden-beheer-lijst"></div>
+          <div class="standaard-nieuw-rij">
+            <input type="text" id="nieuw-standaard-naam" class="filter-select" placeholder="Naam activiteit" style="flex:1;min-width:0">
+            <input type="time" id="nieuw-standaard-tijd" class="filter-select" style="width:110px">
+            <select id="nieuw-standaard-type" class="filter-select">
+              <option value="zakelijk">Zakelijk</option>
+              <option value="prive">Privé</option>
+            </select>
+            <button id="nieuw-standaard-btn" class="primary-btn" style="white-space:nowrap">+ Voeg toe</button>
+          </div>
+        </div>
+        <div class="standaarden-sectie" id="standaarden-dag-sectie">
+          <div class="standaarden-sectie-titel">Toevoegen aan <span id="standaarden-dag-label"></span></div>
+          <div id="standaarden-dag-lijst"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="secondary-btn" id="standaarden-annuleren">Annuleren</button>
+        <button class="primary-btn" id="standaarden-toevoegen-btn">Voeg geselecteerde toe aan dag</button>
       </div>
     </div>
   </div>

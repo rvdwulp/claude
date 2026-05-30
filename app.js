@@ -17,6 +17,7 @@ let geselecteerdVoorDag = new Set();
 let dragSrcId = null;
 let dragSrcSectie = null;
 let huidigeTijdstipTaakId = null;
+let standaarden = [];
 
 function localDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -40,6 +41,7 @@ function laadData() {
   console.log('[LOAD-RAW] actielijst_dagPlanning in localStorage:', rawDag ? rawDag.substring(0, 120) : 'NULL/LEEG');
   taken = Storage.get('actielijst_taken', []);
   dagPlanning = normDagPlanning(Storage.get('actielijst_dagPlanning', {}));
+  standaarden = Storage.get('actielijst_standaarden', []);
   const dagKeys = dagPlanning[vandaagStr()] ? Object.keys(dagPlanning[vandaagStr()]).filter(k => !k.startsWith('__')) : [];
   console.log('[LOAD] taken:', taken.length, '| vandaag in dagPlanning:', dagKeys.length, dagKeys);
 }
@@ -66,7 +68,7 @@ async function syncServer() {
     const res = await fetch('save.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'd=' + encodeURIComponent(JSON.stringify({ taken, dagPlanning }))
+      body: 'd=' + encodeURIComponent(JSON.stringify({ taken, dagPlanning, standaarden }))
     });
     const data = await res.json();
     if (data.status === 'ok') {
@@ -97,6 +99,10 @@ async function laadVanServer() {
       if (data.dagPlanning && typeof data.dagPlanning === 'object') {
         dagPlanning = normDagPlanning(data.dagPlanning);
         Storage.set('actielijst_dagPlanning', dagPlanning);
+      }
+      if (Array.isArray(data.standaarden)) {
+        standaarden = data.standaarden;
+        Storage.set('actielijst_standaarden', standaarden);
       }
       renderAlles();
     }
@@ -144,6 +150,8 @@ function carryForward() {
   for (const [taakId, info] of Object.entries(vorigePlanning)) {
     if (taakId.startsWith('__')) continue; // interne sleutels (volgorde, etc.) overslaan
     if (!info.gedaan && !dagPlanning[vandaag][taakId]) {
+      const taak = taken.find(t => t.id === taakId);
+      if (taak?.isStandaard) continue;
       dagPlanning[vandaag][taakId] = { gedaan: false, overgenomen: true };
       overgenomen++;
     }
@@ -447,7 +455,8 @@ function renderMaster() {
   const status = document.getElementById('filter-status').value;
 
   let gefilterd = taken.filter(t => {
-    if (t.verwijderd) return false; // verwijderde taken nooit in master
+    if (t.verwijderd) return false;
+    if (t.isStandaard) return false;
     if (thema && t.thema !== thema) return false;
     if (periode && t.periode !== periode) return false;
     if (grootte && t.grootte !== grootte) return false;
@@ -575,7 +584,7 @@ function renderMatrix() {
   cells.forEach(cell => {
     const urgent = cell.dataset.urgent === '1';
     const belangrijk = cell.dataset.belangrijk === '1';
-    const bijhorend = taken.filter(t => !t.afgerond && !t.verwijderd && isUrgent(t) === urgent && isBelangrijk(t) === belangrijk);
+    const bijhorend = taken.filter(t => !t.afgerond && !t.verwijderd && !t.isStandaard && isUrgent(t) === urgent && isBelangrijk(t) === belangrijk);
     cell.innerHTML = bijhorend.length
       ? bijhorend.sort((a,b) => a.prio - b.prio).map(t =>
           `<div class="task-card" onclick="bewerkTaak('${t.id}')">
@@ -790,7 +799,7 @@ function renderSelecteerLijst() {
   const planning = dagPlanning[huidigeDag] || {};
 
   const beschikbaar = taken.filter(t => {
-    if (t.verwijderd || t.afgerond) return false; // niet tonen
+    if (t.verwijderd || t.afgerond || t.isStandaard) return false;
     if (planning[t.id] !== undefined) return false; // al in dag
     if (thema && t.thema !== thema) return false;
     if (periode && t.periode !== periode) return false;
@@ -885,6 +894,133 @@ function sluitSnelModal() {
 // Belangrijk = prioriteit 1 t/m 5
 function isUrgent(t)     { return t.periode === 'A'; }
 function isBelangrijk(t) { return t.prio <= 5; }
+
+// ===== STANDAARD DAGACTIES =====
+function slaStandaarden() {
+  Storage.set('actielijst_standaarden', standaarden);
+  clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(syncServer, 800);
+}
+
+function openStandaardenModal() {
+  renderStandaardenModal();
+  document.getElementById('standaarden-modal-overlay').classList.remove('hidden');
+}
+
+function renderStandaardenModal() {
+  document.getElementById('standaarden-dag-label').textContent = formatDatum(huidigeDag);
+
+  const beheerLijst = document.getElementById('standaarden-beheer-lijst');
+  if (!standaarden.length) {
+    beheerLijst.innerHTML = '<div class="standaarden-leeg">Nog geen standaarden. Voeg er hieronder een toe.</div>';
+  } else {
+    beheerLijst.innerHTML = standaarden.map(s => `
+      <div class="standaard-rij" data-id="${s.id}">
+        <input type="text" class="standaard-naam-input filter-select" value="${escHtml(s.naam)}" placeholder="Naam">
+        <input type="time" class="standaard-tijd-input filter-select" value="${s.tijdstip || ''}">
+        <select class="standaard-type-select filter-select">
+          <option value="zakelijk"${s.type !== 'prive' ? ' selected' : ''}>Zakelijk</option>
+          <option value="prive"${s.type === 'prive' ? ' selected' : ''}>Privé</option>
+        </select>
+        <button class="task-action-btn btn-delete standaard-delete-btn" data-tooltip="Verwijderen">&#x1F5D1;</button>
+      </div>
+    `).join('');
+
+    beheerLijst.querySelectorAll('.standaard-rij').forEach(rij => {
+      const id = rij.dataset.id;
+      rij.querySelector('.standaard-naam-input').addEventListener('blur', function() {
+        const val = this.value.trim();
+        if (val) updateStandaard(id, 'naam', val);
+      });
+      rij.querySelector('.standaard-tijd-input').addEventListener('change', function() {
+        updateStandaard(id, 'tijdstip', this.value || null);
+      });
+      rij.querySelector('.standaard-type-select').addEventListener('change', function() {
+        updateStandaard(id, 'type', this.value);
+      });
+      rij.querySelector('.standaard-delete-btn').addEventListener('click', () => verwijderStandaard(id));
+    });
+  }
+
+  const dagLijst = document.getElementById('standaarden-dag-lijst');
+  const dagSectie = document.getElementById('standaarden-dag-sectie');
+  if (!standaarden.length) {
+    dagSectie.style.display = 'none';
+  } else {
+    dagSectie.style.display = '';
+    dagLijst.innerHTML = standaarden.map(s => `
+      <div class="standaard-dag-rij" data-id="${s.id}">
+        <label class="standaard-dag-label">
+          <input type="checkbox" class="standaard-dag-check">
+          <span>${escHtml(s.naam)}</span>
+          ${s.tijdstip ? `<span class="badge badge-grootte">${s.tijdstip}</span>` : ''}
+          <span class="badge badge-${s.type}">${s.type === 'zakelijk' ? 'Zakelijk' : 'Privé'}</span>
+        </label>
+        <input type="time" class="standaard-dag-override filter-select" value="${s.tijdstip || ''}" title="Tijdstip voor deze dag">
+      </div>
+    `).join('');
+  }
+}
+
+function updateStandaard(id, veld, waarde) {
+  standaarden = standaarden.map(s => s.id === id ? { ...s, [veld]: waarde } : s);
+  slaStandaarden();
+}
+
+function verwijderStandaard(id) {
+  standaarden = standaarden.filter(s => s.id !== id);
+  slaStandaarden();
+  renderStandaardenModal();
+}
+
+function voegNieuweStandaardToe() {
+  const naam = document.getElementById('nieuw-standaard-naam').value.trim();
+  if (!naam) { document.getElementById('nieuw-standaard-naam').focus(); return; }
+  const tijdstip = document.getElementById('nieuw-standaard-tijd').value || null;
+  const type = document.getElementById('nieuw-standaard-type').value;
+  standaarden.push({ id: genId(), naam, tijdstip, type });
+  slaStandaarden();
+  document.getElementById('nieuw-standaard-naam').value = '';
+  document.getElementById('nieuw-standaard-tijd').value = '';
+  renderStandaardenModal();
+  document.getElementById('nieuw-standaard-naam').focus();
+}
+
+function voegStandaardenToeAanDag() {
+  const rijen = document.querySelectorAll('.standaard-dag-rij');
+  let toegevoegd = 0;
+  if (!dagPlanning[huidigeDag]) dagPlanning[huidigeDag] = {};
+
+  rijen.forEach(rij => {
+    if (!rij.querySelector('.standaard-dag-check').checked) return;
+    const standaard = standaarden.find(s => s.id === rij.dataset.id);
+    if (!standaard) return;
+    const tijdstip = (rij.querySelector('.standaard-dag-override').value || standaard.tijdstip) || null;
+    const taak = {
+      id: genId(),
+      omschrijving: standaard.naam,
+      thema: 'Overig',
+      type: standaard.type,
+      periode: 'A',
+      grootte: 'K',
+      prio: 5,
+      tijdstip,
+      notities: '',
+      isStandaard: true,
+      afgerond: false,
+      afgerondDatum: null,
+      aangemaakt: new Date().toISOString()
+    };
+    taken.push(taak);
+    dagPlanning[huidigeDag][taak.id] = { gedaan: false, overgenomen: false, tijdstip };
+    toegevoegd++;
+  });
+
+  if (!toegevoegd) return;
+  document.getElementById('standaarden-modal-overlay').classList.add('hidden');
+  slaData();
+  renderDag();
+}
 
 // ===== EXPORT =====
 function exporteerData() {
@@ -986,6 +1122,23 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('snel-werk-btn').addEventListener('click', () => openSnelModal('zakelijk'));
   document.getElementById('snel-prive-btn').addEventListener('click', () => openSnelModal('prive'));
   document.getElementById('taken-selecteren').addEventListener('click', openSelecteerModal);
+  document.getElementById('standaarden-btn').addEventListener('click', openStandaardenModal);
+
+  // Standaarden modal
+  document.getElementById('standaarden-sluiten').addEventListener('click', () => {
+    document.getElementById('standaarden-modal-overlay').classList.add('hidden');
+  });
+  document.getElementById('standaarden-annuleren').addEventListener('click', () => {
+    document.getElementById('standaarden-modal-overlay').classList.add('hidden');
+  });
+  document.getElementById('standaarden-modal-overlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) document.getElementById('standaarden-modal-overlay').classList.add('hidden');
+  });
+  document.getElementById('standaarden-toevoegen-btn').addEventListener('click', voegStandaardenToeAanDag);
+  document.getElementById('nieuw-standaard-btn').addEventListener('click', voegNieuweStandaardToe);
+  document.getElementById('nieuw-standaard-naam').addEventListener('keydown', e => {
+    if (e.key === 'Enter') voegNieuweStandaardToe();
+  });
 
   // Master nieuw
   document.getElementById('nieuwe-taak-btn').addEventListener('click', openNieuweTaakModal);
