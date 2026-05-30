@@ -355,7 +355,7 @@ header h1 {
   text-align: center;
   align-self: center;
   white-space: nowrap;
-  margin-left: 8px;
+  margin-right: 4px;
   flex-shrink: 0;
 }
 

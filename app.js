@@ -245,6 +245,7 @@ function renderDagLijst(containerId, taken, sectieNaam) {
       ondragend="onDagDragEnd(event)">
       <div class="drag-handle" title="Verslepen">&#8597;</div>
       <div class="task-check" onclick="toggleGedaan('${t.id}', event)">${gedaan ? '&#x2713;' : ''}</div>
+      ${tijdstip ? `<div class="task-tijdstip">${tijdstip}</div>` : ''}
       <div class="task-body">
         <div class="task-omschrijving">${escHtml(t.omschrijving)}</div>
         <div class="task-meta">
@@ -257,7 +258,6 @@ function renderDagLijst(containerId, taken, sectieNaam) {
           ${overgenomen ? '<span class="badge" style="background:#fef3c7;color:#92400e">Overgenomen</span>' : ''}
         </div>
       </div>
-      ${tijdstip ? `<div class="task-tijdstip">${tijdstip}</div>` : ''}
       <div class="task-actions">
         <button class="task-action-btn" onclick="openTijdstipModal('${t.id}', event)" data-tooltip="Tijdstip instellen">&#128336;</button>
         <button class="task-action-btn" onclick="verwijderUitDag('${t.id}', event)" data-tooltip="Verwijder uit dag">&#x2715;</button>
