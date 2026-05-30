@@ -733,6 +733,105 @@ header h1 {
   font-size: 14px;
 }
 
+/* ===== TIJDSTIP PICKER ===== */
+.tijdstip-picker { display: flex; flex-direction: column; gap: 8px; }
+
+.picker-uur-rij {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+}
+
+.picker-min-rij {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+
+.picker-uur-rij button, .picker-min-rij button {
+  padding: 6px 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+
+.picker-uur-rij button:hover, .picker-min-rij button:hover {
+  border-color: var(--primary);
+  background: #eff6ff;
+}
+
+.picker-uur-rij button.actief, .picker-min-rij button.actief {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+.picker-footer-rij {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.picker-tekst-input {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.picker-tekst-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+}
+
+.geen-tijd-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.geen-tijd-btn:hover { background: var(--surface2); }
+
+.badge-terugkerend { background: #e0f2fe; color: #0369a1; }
+.badge-thema-Spreker { background: #fce7f3; color: #be185d; }
+
+.altijd-bewaren-label {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--text) !important;
+  cursor: pointer;
+}
+
+.altijd-bewaren-label input[type="checkbox"] {
+  width: auto !important;
+  margin: 0;
+  cursor: pointer;
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
   header { padding: 0 10px; }
@@ -745,4 +844,6 @@ header h1 {
   .matrix-row-header { font-size: 11px; }
   .dag-actions { flex-direction: column; }
   .filter-row { flex-direction: column; align-items: stretch; }
+  .picker-uur-rij { grid-template-columns: repeat(4, 1fr); }
+  .picker-min-rij { grid-template-columns: repeat(4, 1fr); }
 }

@@ -16,6 +16,7 @@ let bewerkTaakId = null;
 let geselecteerdVoorDag = new Set();
 let dragSrcId = null;
 let dragSrcSectie = null;
+let huidigeTijdstipTaakId = null;
 
 function localDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -331,13 +332,107 @@ function verwijderUitDag(taakId, event) {
   }
 }
 
+// ===== TIJDSTIP PICKER =====
+function initTijdstipPicker(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container || container.dataset.pickerInit) return;
+  container.dataset.pickerInit = '1';
+
+  const input = container.querySelector('input[type="time"]');
+
+  const uurRij = document.createElement('div');
+  uurRij.className = 'picker-uur-rij';
+  for (let h = 7; h <= 18; h++) {
+    const uur = String(h).padStart(2, '0');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.uur = uur;
+    btn.textContent = uur;
+    btn.addEventListener('click', () => {
+      const curMin = input.value ? input.value.split(':')[1] : '00';
+      input.value = uur + ':' + curMin;
+      syncPickerButtons(container, input);
+    });
+    uurRij.appendChild(btn);
+  }
+
+  const minRij = document.createElement('div');
+  minRij.className = 'picker-min-rij';
+  for (const m of ['00', '10', '15', '20', '30', '40', '45', '50']) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.min = m;
+    btn.textContent = ':' + m;
+    btn.addEventListener('click', () => {
+      const curUur = input.value ? input.value.split(':')[0] : '09';
+      input.value = curUur + ':' + m;
+      syncPickerButtons(container, input);
+    });
+    minRij.appendChild(btn);
+  }
+
+  const footer = document.createElement('div');
+  footer.className = 'picker-footer-rij';
+  const geenTijdBtn = document.createElement('button');
+  geenTijdBtn.type = 'button';
+  geenTijdBtn.className = 'geen-tijd-btn';
+  geenTijdBtn.textContent = 'Geen tijd';
+  geenTijdBtn.addEventListener('click', () => {
+    input.value = '';
+    syncPickerButtons(container, input);
+  });
+  footer.appendChild(geenTijdBtn);
+  footer.appendChild(input);
+
+  input.addEventListener('input', () => syncPickerButtons(container, input));
+
+  container.innerHTML = '';
+  container.appendChild(uurRij);
+  container.appendChild(minRij);
+  container.appendChild(footer);
+}
+
+function syncPickerButtons(container, input) {
+  const val = input.value;
+  const uur = val ? val.split(':')[0] : null;
+  const min = val ? val.split(':')[1] : null;
+  container.querySelectorAll('.picker-uur-rij button').forEach(btn => {
+    btn.classList.toggle('actief', btn.dataset.uur === uur);
+  });
+  container.querySelectorAll('.picker-min-rij button').forEach(btn => {
+    btn.classList.toggle('actief', btn.dataset.min === min);
+  });
+}
+
+function setTijdstipPickerWaarde(containerId, waarde) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const input = container.querySelector('input[type="time"]');
+  if (!input) return;
+  input.value = waarde || '';
+  syncPickerButtons(container, input);
+}
+
 function openTijdstipModal(taakId, event) {
   event.stopPropagation();
+  huidigeTijdstipTaakId = taakId;
   const huidigTijdstip = dagPlanning[huidigeDag]?.[taakId]?.tijdstip || '';
-  const nieuw = prompt('Tijdstip (bijv. 10:30), leeg om te verwijderen:', huidigTijdstip);
-  if (nieuw === null) return;
+  setTijdstipPickerWaarde('dag-tijdstip-picker', huidigTijdstip);
+  document.getElementById('dag-tijdstip-modal-overlay').classList.remove('hidden');
+}
+
+function slaaDagTijdstipOp() {
+  if (!huidigeTijdstipTaakId) return;
+  const container = document.getElementById('dag-tijdstip-picker');
+  const input = container ? container.querySelector('input[type="time"]') : null;
+  const nieuw = input ? input.value.trim() : '';
   if (!dagPlanning[huidigeDag]) dagPlanning[huidigeDag] = {};
-  dagPlanning[huidigeDag][taakId] = { ...dagPlanning[huidigeDag][taakId], tijdstip: nieuw.trim() || null };
+  dagPlanning[huidigeDag][huidigeTijdstipTaakId] = {
+    ...dagPlanning[huidigeDag][huidigeTijdstipTaakId],
+    tijdstip: nieuw || null
+  };
+  huidigeTijdstipTaakId = null;
+  document.getElementById('dag-tijdstip-modal-overlay').classList.add('hidden');
   slaData();
   renderDag();
 }
@@ -358,8 +453,9 @@ function renderMaster() {
     if (grootte && t.grootte !== grootte) return false;
     if (type && t.type !== type) return false;
     if (prio && String(t.prio) !== prio) return false;
-    if (status === 'actief' && t.afgerond) return false;
+    if (status === 'actief' && t.afgerond && !t.altijdBewaren) return false;
     if (status === 'afgerond' && !t.afgerond) return false;
+    if (status === 'terugkerend' && !t.altijdBewaren) return false;
     return true;
   });
 
@@ -422,11 +518,12 @@ function renderMasterKaart(t) {
         ${!belangrijk ? '<span class="badge badge-grootte">Niet belangrijk</span>' : ''}
         ${afgerond ? `<span class="badge badge-afgerond">Afgerond${t.afgerondDatum ? ' ' + t.afgerondDatum.slice(5,10).replace('-','/') : ''}</span>` : ''}
         ${t.notities ? `<span class="badge badge-grootte" title="${escHtml(t.notities)}">📝</span>` : ''}
+        ${t.altijdBewaren ? '<span class="badge badge-terugkerend" title="Terugkerende taak">↻</span>' : ''}
       </div>
     </div>
     <div class="task-actions">
       ${!afgerond ? `<button class="task-action-btn btn-dag" onclick="voegToeAanVandaag('${t.id}', event)" data-tooltip="Aan vandaag toevoegen">+</button>` : ''}
-      <button class="task-action-btn btn-gedaan" onclick="toggleMasterAfgerond('${t.id}', event)" data-tooltip="${afgerond ? 'Heropen taak' : 'Markeer als gedaan'}">
+      <button class="task-action-btn btn-gedaan" onclick="toggleMasterAfgerond('${t.id}', event)" data-tooltip="${afgerond ? 'Heropen taak' : (t.altijdBewaren ? 'Terugkerende taak' : 'Markeer als gedaan')}">
         ${afgerond ? '&#x21A9;' : '&#x2713;'}
       </button>
       <button class="task-action-btn btn-delete" onclick="verwijderTaak('${t.id}', event)" data-tooltip="Verwijderen">&#x1F5D1;</button>
@@ -452,6 +549,9 @@ function toggleMasterAfgerond(taakId, event) {
   event.stopPropagation();
   taken = taken.map(t => {
     if (t.id !== taakId) return t;
+    if (t.altijdBewaren) {
+      return { ...t, afgerond: false, afgerondDatum: null };
+    }
     const wordtAfgerond = !t.afgerond;
     return { ...t, afgerond: wordtAfgerond, afgerondDatum: wordtAfgerond ? vandaagStr() : null };
   });
@@ -602,8 +702,9 @@ function openNieuweTaakModal() {
   setModalWaarde('periode', 'B');
   setModalWaarde('grootte', 'M');
   setModalWaarde('prio', standaardPrioVoorThema('IURC'));
-  document.getElementById('taak-tijd').value = '';
+  setTijdstipPickerWaarde('taak-tijd-picker', '');
   document.getElementById('taak-notities').value = '';
+  document.getElementById('taak-altijd-bewaren').checked = false;
   togglePriveVelden();
   document.getElementById('modal-overlay').classList.remove('hidden');
   document.getElementById('taak-omschrijving').focus();
@@ -620,8 +721,9 @@ function bewerkTaak(taakId) {
   setModalWaarde('periode', t.periode || 'B');
   setModalWaarde('grootte', t.grootte || 'M');
   setModalWaarde('prio', t.prio || 5);
-  document.getElementById('taak-tijd').value = t.tijdstip || '';
+  setTijdstipPickerWaarde('taak-tijd-picker', t.tijdstip || '');
   document.getElementById('taak-notities').value = t.notities || '';
+  document.getElementById('taak-altijd-bewaren').checked = !!t.altijdBewaren;
   togglePriveVelden();
   document.getElementById('modal-overlay').classList.remove('hidden');
   document.getElementById('taak-omschrijving').focus();
@@ -646,6 +748,7 @@ function slaModalOp() {
     prio,
     tijdstip: document.getElementById('taak-tijd').value || null,
     notities: document.getElementById('taak-notities').value.trim(),
+    altijdBewaren: !!document.getElementById('taak-altijd-bewaren').checked,
     afgerond: oud?.afgerond || false,
     afgerondDatum: oud?.afgerondDatum || null,
     aangemaakt: oud?.aangemaakt || new Date().toISOString()
@@ -741,7 +844,7 @@ function openSnelModal(type) {
   snelModalType = type || 'zakelijk';
   document.getElementById('snel-modal-titel').textContent = snelModalType === 'prive' ? 'Snel privé' : 'Snel werk';
   document.getElementById('snel-onderwerp').value = '';
-  document.getElementById('snel-tijd').value = '';
+  setTijdstipPickerWaarde('snel-tijd-picker', '');
   document.getElementById('snel-modal-overlay').classList.remove('hidden');
   document.getElementById('snel-onderwerp').focus();
 }
@@ -842,6 +945,23 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('[INIT] localStorage heeft data → push naar server');
     syncServer();
   }
+
+  // Init tijdstip pickers
+  initTijdstipPicker('taak-tijd-picker');
+  initTijdstipPicker('snel-tijd-picker');
+  initTijdstipPicker('dag-tijdstip-picker');
+
+  // Dag tijdstip modal
+  document.getElementById('dag-tijdstip-opslaan').addEventListener('click', slaaDagTijdstipOp);
+  document.getElementById('dag-tijdstip-sluiten').addEventListener('click', () => {
+    document.getElementById('dag-tijdstip-modal-overlay').classList.add('hidden');
+  });
+  document.getElementById('dag-tijdstip-annuleren').addEventListener('click', () => {
+    document.getElementById('dag-tijdstip-modal-overlay').classList.add('hidden');
+  });
+  document.getElementById('dag-tijdstip-modal-overlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) document.getElementById('dag-tijdstip-modal-overlay').classList.add('hidden');
+  });
 
   // Tab navigatie
   document.querySelectorAll('.tab-btn').forEach(btn => {

@@ -118,6 +118,7 @@
           <select id="filter-status" class="filter-select">
             <option value="actief">Actief</option>
             <option value="afgerond">Afgerond</option>
+            <option value="terugkerend">Terugkerend</option>
             <option value="">Alles</option>
           </select>
           <button id="filter-reset" class="reset-btn">✕ Reset</button>
@@ -268,7 +269,9 @@
           </div>
           <div>
             <label>Tijdstip (optioneel)</label>
-            <input type="time" id="taak-tijd">
+            <div id="taak-tijd-picker" class="tijdstip-picker">
+              <input type="time" id="taak-tijd" class="picker-tekst-input">
+            </div>
           </div>
         </div>
         <div class="form-row" id="modal-urgentie-row">
@@ -282,6 +285,12 @@
         <div class="form-row">
           <label>Notities</label>
           <textarea id="taak-notities" rows="3" placeholder="Extra informatie..."></textarea>
+        </div>
+        <div class="form-row">
+          <label class="altijd-bewaren-label">
+            <input type="checkbox" id="taak-altijd-bewaren">
+            Bewaar altijd in master (terugkerende taak)
+          </label>
         </div>
       </div>
       <div class="modal-footer">
@@ -341,12 +350,33 @@
         </div>
         <div class="form-row">
           <label>Tijdstip (optioneel)</label>
-          <input type="time" id="snel-tijd">
+          <div id="snel-tijd-picker" class="tijdstip-picker">
+            <input type="time" id="snel-tijd" class="picker-tekst-input">
+          </div>
         </div>
       </div>
       <div class="modal-footer">
         <button class="secondary-btn" id="snel-modal-annuleren">Annuleren</button>
         <button class="primary-btn" id="snel-modal-opslaan">Toevoegen aan dag</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Tijdstip instellen (dag) -->
+  <div id="dag-tijdstip-modal-overlay" class="modal-overlay hidden">
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header">
+        <h2>Tijdstip instellen</h2>
+        <button class="close-btn" id="dag-tijdstip-sluiten">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <div id="dag-tijdstip-picker" class="tijdstip-picker">
+          <input type="time" id="dag-tijdstip-input" class="picker-tekst-input">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="secondary-btn" id="dag-tijdstip-annuleren">Annuleren</button>
+        <button class="primary-btn" id="dag-tijdstip-opslaan">Opslaan</button>
       </div>
     </div>
   </div>
