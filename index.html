@@ -18,6 +18,7 @@
         <button class="tab-btn" data-tab="master">Master</button>
         <button class="tab-btn" data-tab="matrix">Matrix</button>
         <button class="tab-btn" data-tab="archief">Archief</button>
+        <button class="tab-btn" data-tab="stats">Stats</button>
       </nav>
       <div class="header-right">
         <button id="sync-btn" class="icon-btn" title="Sync status">⟳</button>
@@ -178,6 +179,11 @@
       </div>
     </div>
 
+    <!-- STATS TAB -->
+    <div id="tab-stats" class="tab-content">
+      <div id="stats-content"></div>
+    </div>
+
     <!-- ARCHIEF TAB -->
     <div id="tab-archief" class="tab-content">
       <div class="archief-toolbar">
@@ -234,7 +240,12 @@
         </div>
         <div class="form-row two-col" id="modal-periode-grootte-row">
           <div>
-            <label>Periode</label>
+            <label>Periode <button type="button" class="info-btn" onclick="toggleInfoPopup('popup-periode');event.stopPropagation()">ℹ</button></label>
+            <div class="info-popup hidden" id="popup-periode">
+              <div class="info-popup-item"><b>A</b> Nu</div>
+              <div class="info-popup-item"><b>B</b> &lt; 2 weken</div>
+              <div class="info-popup-item"><b>C</b> &gt; 2 weken</div>
+            </div>
             <div class="btn-groep" id="taak-periode-btns">
               <button type="button" data-value="A" onclick="setModalWaarde('periode','A')">A</button>
               <button type="button" data-value="B" onclick="setModalWaarde('periode','B')">B</button>
@@ -243,7 +254,13 @@
             <input type="hidden" id="taak-periode" value="B">
           </div>
           <div>
-            <label>Grootte</label>
+            <label>Grootte <button type="button" class="info-btn" onclick="toggleInfoPopup('popup-grootte');event.stopPropagation()">ℹ</button></label>
+            <div class="info-popup hidden" id="popup-grootte">
+              <div class="info-popup-item"><b>K</b> tot 1 uur</div>
+              <div class="info-popup-item"><b>M</b> 1 tot 3 uur</div>
+              <div class="info-popup-item"><b>L</b> 3 tot 8 uur</div>
+              <div class="info-popup-item"><b>XL</b> meer dan 8 uur</div>
+            </div>
             <div class="btn-groep" id="taak-grootte-btns">
               <button type="button" data-value="K" onclick="setModalWaarde('grootte','K')">K</button>
               <button type="button" data-value="M" onclick="setModalWaarde('grootte','M')">M</button>

@@ -587,8 +587,9 @@ function renderMatrix() {
     const belangrijk = cell.dataset.belangrijk === '1';
     const bijhorend = taken.filter(t => !t.afgerond && !t.verwijderd && !t.isStandaard && isUrgent(t) === urgent && isBelangrijk(t) === belangrijk);
     cell.innerHTML = bijhorend.length
-      ? bijhorend.sort((a,b) => a.prio - b.prio).map(t =>
-          `<div class="task-card" onclick="bewerkTaak('${t.id}')">
+      ? bijhorend.sort((a,b) => a.prio - b.prio).map(t => {
+          const inVandaag = !!(dagPlanning[vandaagStr()]?.[t.id]);
+          return `<div class="task-card" onclick="bewerkTaak('${t.id}')">
             <div class="task-body">
               <div class="task-omschrijving" style="font-size:12px">${escHtml(t.omschrijving)}</div>
               <div class="task-meta">
@@ -597,7 +598,13 @@ function renderMatrix() {
                 <span class="badge badge-prio" style="font-size:10px">P${t.prio}</span>
               </div>
             </div>
-          </div>`).join('')
+            <div class="task-actions">
+              ${!inVandaag ? `<button class="task-action-btn btn-dag" onclick="voegToeAanVandaag('${t.id}', event)" data-tooltip="Aan vandaag">+</button>` : ''}
+              <button class="task-action-btn btn-gedaan" onclick="toggleMasterAfgerond('${t.id}', event)" data-tooltip="Afronden">&#x2713;</button>
+              <button class="task-action-btn btn-delete" onclick="verwijderTaak('${t.id}', event)" data-tooltip="Verwijderen">&#x1F5D1;</button>
+            </div>
+          </div>`;
+        }).join('')
       : '<div style="color:#94a3b8;font-size:12px;padding:8px">Leeg</div>';
   });
 }
@@ -1113,6 +1120,205 @@ function verwerkImportBestand(file) {
   reader.readAsText(file);
 }
 
+// ===== INFO POPUP =====
+function toggleInfoPopup(id) {
+  const popup = document.getElementById(id);
+  if (!popup) return;
+  const isOpen = !popup.classList.contains('hidden');
+  document.querySelectorAll('.info-popup').forEach(p => p.classList.add('hidden'));
+  if (!isOpen) popup.classList.remove('hidden');
+}
+
+// ===== STATISTIEKEN =====
+function getMondayStr(d) {
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const mon = new Date(d);
+  mon.setDate(mon.getDate() + diff);
+  return localDateStr(mon);
+}
+
+function getLast12Mondays() {
+  const result = [];
+  let d = new Date(getMondayStr(new Date()) + 'T00:00:00');
+  for (let i = 0; i < 12; i++) {
+    result.unshift(localDateStr(d));
+    d.setDate(d.getDate() - 7);
+  }
+  return result;
+}
+
+function getLast6Months() {
+  const result = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    result.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+  }
+  return result;
+}
+
+function formatMaand(str) {
+  const [y, m] = str.split('-');
+  const mnd = ['Jan','Feb','Mrt','Apr','Mei','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
+  return mnd[parseInt(m)-1] + ' \'' + y.slice(2);
+}
+
+function formatWeekLabel(mondayStr) {
+  const d = new Date(mondayStr + 'T00:00:00');
+  return `${d.getDate()}/${d.getMonth()+1}`;
+}
+
+function statBar(label, val, max, kleur) {
+  const w = max ? Math.max(val > 0 ? 3 : 0, Math.round((val / max) * 100)) : 0;
+  return `<div class="stat-bar-rij">
+    <div class="stat-bar-label">${escHtml(String(label))}</div>
+    <div class="stat-bar-outer"><div class="stat-bar-inner" style="width:${w}%;${kleur ? 'background:' + kleur : ''}"></div></div>
+    <div class="stat-bar-waarde">${val}</div>
+  </div>`;
+}
+
+function renderStatistieken() {
+  const container = document.getElementById('stats-content');
+  if (!container) return;
+
+  const vandaag = vandaagStr();
+  const actief = taken.filter(t => !t.afgerond && !t.verwijderd && !t.isStandaard);
+  const afgerond = taken.filter(t => t.afgerond && !t.verwijderd && !t.isStandaard);
+  const weekMon = getMondayStr(new Date());
+  const maandPrefix = vandaag.slice(0, 7);
+  const afgerondDezeWeek = afgerond.filter(t => t.afgerondDatum >= weekMon).length;
+  const afgerondDezeMaand = afgerond.filter(t => t.afgerondDatum?.startsWith(maandPrefix)).length;
+  const inDagVandaag = Object.keys(dagPlanning[vandaag] || {}).filter(k => !k.startsWith('__')).length;
+
+  // --- Overzicht ---
+  const overzichtHTML = `<div class="stats-sectie">
+    <div class="stats-sectie-titel">Overzicht</div>
+    <div class="stat-cards">
+      <div class="stat-card"><div class="stat-card-val">${actief.length}</div><div class="stat-card-label">Actief</div></div>
+      <div class="stat-card"><div class="stat-card-val">${afgerond.length}</div><div class="stat-card-label">Afgerond</div></div>
+      <div class="stat-card stat-card-groen"><div class="stat-card-val">${afgerondDezeWeek}</div><div class="stat-card-label">Deze week</div></div>
+      <div class="stat-card stat-card-blauw"><div class="stat-card-val">${afgerondDezeMaand}</div><div class="stat-card-label">Deze maand</div></div>
+      <div class="stat-card stat-card-oranje"><div class="stat-card-val">${inDagVandaag}</div><div class="stat-card-label">Vandaag ingepland</div></div>
+    </div>
+  </div>`;
+
+  // --- Per thema ---
+  const themas = ['IURC','AI','Innovatie','DHM','TD','EU','Spreker','Overig'];
+  const themaKleuren = { IURC:'#1d4ed8', AI:'#6d28d9', Innovatie:'#15803d', DHM:'#c2410c', TD:'#0d9488', EU:'#3730a3', Spreker:'#be185d', Overig:'#475569' };
+  const perThema = {};
+  themas.forEach(t => perThema[t] = 0);
+  actief.forEach(t => { if (perThema[t.thema] !== undefined) perThema[t.thema]++; });
+  const maxThema = Math.max(...Object.values(perThema), 1);
+  const themaHTML = `<div class="stats-sectie">
+    <div class="stats-sectie-titel">Per thema (actief)</div>
+    <div class="stat-bars">${themas.map(t => statBar(t, perThema[t], maxThema, themaKleuren[t])).join('')}</div>
+  </div>`;
+
+  // --- Per kwadrant ---
+  const kwadranten = [
+    { label:'Doe nu', sub:'Urgent + Belangrijk', u:true, b:true, kleur:'#dc2626' },
+    { label:'Plan in', sub:'Niet urgent + Belangrijk', u:false, b:true, kleur:'#2563eb' },
+    { label:'Delegeer', sub:'Urgent + Niet belangrijk', u:true, b:false, kleur:'#d97706' },
+    { label:'Elimineer', sub:'Niet urgent + Niet belangrijk', u:false, b:false, kleur:'#94a3b8' },
+  ];
+  const kwadrantHTML = `<div class="stats-sectie">
+    <div class="stats-sectie-titel">Per kwadrant (actief)</div>
+    <div class="stat-kwadranten">
+      ${kwadranten.map(k => {
+        const count = actief.filter(t => isUrgent(t) === k.u && isBelangrijk(t) === k.b).length;
+        return `<div class="stat-kwadrant" style="border-top:3px solid ${k.kleur}">
+          <div class="stat-kwadrant-val">${count}</div>
+          <div class="stat-kwadrant-label">${k.label}</div>
+          <div class="stat-kwadrant-sub">${k.sub}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  // --- Per prioriteit ---
+  const perPrio = {};
+  for (let i = 1; i <= 10; i++) perPrio[i] = 0;
+  actief.forEach(t => { if (t.prio >= 1 && t.prio <= 10) perPrio[t.prio]++; });
+  const maxPrio = Math.max(...Object.values(perPrio), 1);
+  const prioHTML = `<div class="stats-sectie">
+    <div class="stats-sectie-titel">Per prioriteit (actief)</div>
+    <div class="stat-bars">
+      ${Object.entries(perPrio).map(([p, c]) => statBar('P'+p, c, maxPrio, parseInt(p) <= 3 ? '#dc2626' : parseInt(p) <= 6 ? '#d97706' : '#94a3b8')).join('')}
+    </div>
+  </div>`;
+
+  // --- Per weekdag ---
+  const dagNamen = ['Ma','Di','Wo','Do','Vr','Za','Zo'];
+  const perWeekdag = [0,0,0,0,0,0,0];
+  afgerond.forEach(t => {
+    if (!t.afgerondDatum) return;
+    const dag = new Date(t.afgerondDatum + 'T00:00:00').getDay();
+    perWeekdag[dag === 0 ? 6 : dag - 1]++;
+  });
+  const maxWeekdag = Math.max(...perWeekdag, 1);
+  const weekdagHTML = `<div class="stats-sectie">
+    <div class="stats-sectie-titel">Per weekdag (afgerond ooit)</div>
+    <div class="stat-bars">${dagNamen.map((n, i) => statBar(n, perWeekdag[i], maxWeekdag)).join('')}</div>
+  </div>`;
+
+  // --- Per week (last 12) ---
+  const mondays = getLast12Mondays();
+  const perWeek = {};
+  mondays.forEach(m => perWeek[m] = 0);
+  afgerond.forEach(t => {
+    if (!t.afgerondDatum) return;
+    const mon = getMondayStr(new Date(t.afgerondDatum + 'T00:00:00'));
+    if (perWeek[mon] !== undefined) perWeek[mon]++;
+  });
+  const maxWeek = Math.max(...Object.values(perWeek), 1);
+  const weekHTML = `<div class="stats-sectie">
+    <div class="stats-sectie-titel">Per week (laatste 12 weken)</div>
+    <div class="stat-bars">${mondays.map(m => statBar(formatWeekLabel(m), perWeek[m], maxWeek)).join('')}</div>
+  </div>`;
+
+  // --- Per maand (last 6) ---
+  const maanden = getLast6Months();
+  const perMaand = {};
+  maanden.forEach(m => perMaand[m] = 0);
+  afgerond.forEach(t => {
+    if (!t.afgerondDatum) return;
+    const prefix = t.afgerondDatum.slice(0, 7);
+    if (perMaand[prefix] !== undefined) perMaand[prefix]++;
+  });
+  const maxMaand = Math.max(...Object.values(perMaand), 1);
+  const maandHTML = `<div class="stats-sectie">
+    <div class="stats-sectie-titel">Per maand (laatste 6 maanden)</div>
+    <div class="stat-bars">${maanden.map(m => statBar(formatMaand(m), perMaand[m], maxMaand)).join('')}</div>
+  </div>`;
+
+  // --- Stokstaartjes ---
+  const uniekeDagen = new Set(afgerond.map(t => t.afgerondDatum).filter(Boolean)).size;
+  const uniekeThemas = new Set(afgerond.map(t => t.thema)).size;
+  const stokstaartjes = [
+    { naam:'Snel Piet', emoji:'⚡', omschrijving:'Razendsnelle voltooier', check: afgerond.filter(t => t.grootte === 'K').length >= 10, detail:`${afgerond.filter(t => t.grootte === 'K').length} kleine taken afgerond` },
+    { naam:'Groot Gijs', emoji:'🏔️', omschrijving:'Sloopt XL-taken als niets', check: afgerond.filter(t => t.grootte === 'XL').length >= 1, detail:`${afgerond.filter(t => t.grootte === 'XL').length} XL-taken afgerond` },
+    { naam:'Strenge Stef', emoji:'🎯', omschrijving:'Hoge prio, hoge discipline', check: afgerond.filter(t => t.prio <= 2).length >= 5, detail:`${afgerond.filter(t => t.prio <= 2).length} prio 1–2 taken afgerond` },
+    { naam:'Consistente Kim', emoji:'🔥', omschrijving:'Actief op 5+ werkdagen', check: uniekeDagen >= 5, detail:`${uniekeDagen} unieke dagen gewerkt` },
+    { naam:'Breed Boris', emoji:'🌈', omschrijving:'Werkt aan 4+ thema\'s', check: uniekeThemas >= 4, detail:`${uniekeThemas} verschillende thema's` },
+    { naam:'Honderd Henk', emoji:'💯', omschrijving:'100 taken voltooid', check: afgerond.length >= 100, detail:`${afgerond.length} taken afgerond` },
+  ];
+  const stokstaartjesHTML = `<div class="stats-sectie">
+    <div class="stats-sectie-titel">Stokstaartjes</div>
+    <div class="stat-stokstaartjes">
+      ${stokstaartjes.map(s => `<div class="stat-stokstaart ${s.check ? 'behaald' : 'niet-behaald'}">
+        <div class="stok-emoji">${s.emoji}</div>
+        <div class="stok-naam">${s.naam}</div>
+        <div class="stok-omschrijving">${s.omschrijving}</div>
+        <div class="stok-detail">${s.detail}</div>
+        <div class="stok-badge ${s.check ? '' : 'niet-badge'}">${s.check ? '✓ Behaald' : 'Nog niet'}</div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+
+  container.innerHTML = overzichtHTML + themaHTML + kwadrantHTML + prioHTML + weekdagHTML + weekHTML + maandHTML + stokstaartjesHTML;
+}
+
 // ===== HELPERS =====
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2,7);
@@ -1127,6 +1333,7 @@ function renderAlles() {
   renderMaster();
   renderMatrix();
   renderArchief();
+  renderStatistieken();
 }
 
 // ===== NAVIGATIE =====
@@ -1137,6 +1344,7 @@ function wisselTab(naam) {
   if (naam === 'master') renderMaster();
   if (naam === 'matrix') renderMatrix();
   if (naam === 'archief') renderArchief();
+  if (naam === 'stats') renderStatistieken();
 }
 
 // ===== INIT =====
@@ -1152,6 +1360,11 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('[INIT] localStorage heeft data → push naar server');
     syncServer();
   }
+
+  // Info popup: sluiten bij klik buiten popup
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.info-popup').forEach(p => p.classList.add('hidden'));
+  });
 
   // Init tijdstip pickers
   initTijdstipPicker('taak-tijd-picker');
