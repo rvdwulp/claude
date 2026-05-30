@@ -16,7 +16,6 @@ let bewerkTaakId = null;
 let geselecteerdVoorDag = new Set();
 let dragSrcId = null;
 let dragSrcSectie = null;
-let localGevijzigd = false;  // true zodra de gebruiker iets wijzigt in deze sessie
 
 function localDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -32,7 +31,6 @@ function laadData() {
 }
 
 function slaData() {
-  localGevijzigd = true;
   Storage.set('taken', taken);
   Storage.set('dagPlanning', dagPlanning);
   clearTimeout(syncTimeout);
@@ -71,7 +69,7 @@ async function laadVanServer() {
   try {
     const res = await fetch('save.php');
     const data = await res.json();
-    if (data.heeftData && !localGevijzigd) {
+    if (data.heeftData) {
       if (Array.isArray(data.taken)) {
         taken = data.taken;
         Storage.set('taken', taken);
@@ -80,11 +78,10 @@ async function laadVanServer() {
         dagPlanning = data.dagPlanning;
         Storage.set('dagPlanning', dagPlanning);
       }
+      renderAlles();
     }
-    renderAlles();
   } catch(e) {
-    console.error('Laden van server mislukt, lokale opslag gebruikt:', e);
-    renderAlles();
+    console.error('Laden van server mislukt:', e);
   }
 }
 
@@ -821,7 +818,11 @@ document.addEventListener('DOMContentLoaded', () => {
   laadData();
   carryForward();
   renderAlles();
-  laadVanServer();
+  if (taken.length === 0 && Object.keys(dagPlanning).length === 0) {
+    laadVanServer();
+  } else {
+    syncServer();
+  }
 
   // Tab navigatie
   document.querySelectorAll('.tab-btn').forEach(btn => {
