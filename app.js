@@ -364,7 +364,7 @@ function renderMaster() {
   });
 
   // Groepeer per thema
-  const themas = ['IURC', 'AI', 'Innovatie', 'DHM', 'TD', 'EU', 'Presentatie', 'Overig'];
+  const themas = ['IURC', 'AI', 'Innovatie', 'DHM', 'TD', 'EU', 'Spreker', 'Overig'];
   const container = document.getElementById('master-lijst');
 
   if (!gefilterd.length) {
@@ -579,6 +579,9 @@ function togglePriveVelden() {
   document.getElementById('modal-urgentie-row').style.display = isPrive ? 'none' : '';
 }
 
+const THEMA_STANDAARD_PRIO = { IURC: 1, Overig: 2, AI: 3, Spreker: 3, Innovatie: 4, DHM: 5, TD: 6, EU: 8 };
+function standaardPrioVoorThema(thema) { return THEMA_STANDAARD_PRIO[thema] ?? 5; }
+
 function openNieuweTaakModal() {
   bewerkTaakId = null;
   document.getElementById('modal-titel').textContent = 'Nieuwe taak';
@@ -587,7 +590,7 @@ function openNieuweTaakModal() {
   document.getElementById('taak-type').value = 'zakelijk';
   document.getElementById('taak-periode').value = 'B';
   document.getElementById('taak-grootte').value = 'M';
-  document.getElementById('taak-prio').value = 5;
+  document.getElementById('taak-prio').value = standaardPrioVoorThema('IURC');
   document.getElementById('taak-tijd').value = '';
   document.getElementById('taak-notities').value = '';
   updateAutoIndicatie();
@@ -892,6 +895,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Auto-indicatie in modal bijwerken bij wijzigen periode/prio
   document.getElementById('taak-periode').addEventListener('change', updateAutoIndicatie);
   document.getElementById('taak-prio').addEventListener('input', updateAutoIndicatie);
+
+  // Standaard prioriteit invullen bij thema-keuze (alleen bij nieuwe taak, niet bewerken)
+  document.getElementById('taak-thema').addEventListener('change', () => {
+    if (bewerkTaakId) return;
+    const thema = document.getElementById('taak-thema').value;
+    document.getElementById('taak-prio').value = standaardPrioVoorThema(thema);
+    updateAutoIndicatie();
+  });
 
   // Privé: verberg overige velden
   document.getElementById('taak-type').addEventListener('change', togglePriveVelden);
