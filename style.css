@@ -895,18 +895,156 @@ header h1 {
   cursor: pointer;
 }
 
-/* ===== RESPONSIVE ===== */
+/* ===== RESPONSIVE (desktop fallback) ===== */
 @media (max-width: 600px) {
-  header { padding: 0 10px; }
-  header h1 { font-size: 14px; }
-  .tab-btn { padding: 5px 10px; font-size: 12px; }
-  .tab-content { padding: 10px; }
   .form-row.two-col { grid-template-columns: 1fr; }
   .matrix-grid { height: auto; }
   .matrix-row, .matrix-header-row { grid-template-columns: 50px 1fr 1fr; }
   .matrix-row-header { font-size: 11px; }
-  .dag-actions { flex-direction: column; }
   .filter-row { flex-direction: column; align-items: stretch; }
+}
+
+/* ====================================================
+   MOBIELE OPTIMALISATIES
+   Breakpoints: 768 / 480 / 375 / 320
+   ==================================================== */
+
+/* Touch-apparaten: verwijder hover-afhankelijke interacties ———————— */
+@media (hover: none) {
+  /* Taakacties altijd zichtbaar (geen hover nodig) */
+  .task-card .task-actions { opacity: 1; }
+  /* Drag werkt niet op touch — verberg de handle */
+  .task-card .drag-handle { display: none; }
+  /* Verwijder hover-stijlen die op touch niet triggeren */
+  .task-card:hover { border-color: var(--border); box-shadow: none; }
+  .task-card:active { border-color: var(--primary); background: #f0f6ff; }
+  /* Tooltips zijn niet bruikbaar op touch */
+  .task-action-btn[data-tooltip]::before { display: none; }
+  /* Actieve staten als feedback in plaats van hover */
+  .task-action-btn:active { background: var(--border) !important; }
+  .primary-btn:active { background: var(--primary-dark); }
+  .secondary-btn:active { background: var(--surface2); }
+  .nav-btn:active { background: var(--surface2); }
+  .tab-btn:active:not(.active) { background: var(--surface2); }
+}
+
+/* Tablets en telefoons (≤ 768px) ————————————————————————————————— */
+@media (max-width: 768px) {
+  /* iOS/Android: font-size ≥ 16px voorkomt automatisch inzoomen bij focus */
+  input[type="text"],
+  input[type="time"],
+  input[type="number"],
+  input[type="month"],
+  select,
+  textarea { font-size: 16px !important; }
+
+  /* Modals als bottom-sheet: schuift omhoog vanuit de onderkant */
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal {
+    max-width: 100% !important;
+    border-radius: 20px 20px 0 0;
+    max-height: 92vh;
+  }
+  /* Ruimte voor iOS home-indicator (notch/pill) */
+  .modal-footer {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Tap-targets: minimaal 44×44px (Apple HIG) */
+  .task-check { width: 26px; height: 26px; min-width: 26px; }
+  .task-action-btn { width: 36px; height: 36px; font-size: 14px; }
+  .close-btn { width: 36px; height: 36px; font-size: 15px; }
+  .nav-btn { width: 44px; height: 44px; }
+  .icon-btn { width: 40px; height: 40px; }
+  .tab-btn { min-height: 44px; display: flex; align-items: center; justify-content: center; }
+  .primary-btn, .secondary-btn { min-height: 44px; }
+  .filter-select { min-height: 44px; }
+  .geen-tijd-btn { min-height: 44px; padding: 8px 14px; }
+  .reset-btn { min-height: 44px; }
+  .picker-uur-rij button, .picker-min-rij button { min-height: 44px; }
+
+  /* Iets meer padding op kaarten voor comfortabeler aanraken */
+  .task-card { padding: 12px 10px; }
+
+  /* Dag-acties: ⚡ Snel werk | ⚡ Snel privé naast elkaar (50/50)
+     Taken selecteren | ☰ Standaarden ook naast elkaar               */
+  .dag-actions { flex-direction: row; flex-wrap: wrap; gap: 8px; }
+  #snel-werk-btn, #snel-prive-btn {
+    flex: 1 0 calc(50% - 4px);
+    text-align: center;
+  }
+  #taken-selecteren, #standaarden-btn {
+    flex: 1 0 calc(50% - 4px);
+    text-align: center;
+  }
+}
+
+/* Smartphones (≤ 480px) ————————————————————————————————————————— */
+@media (max-width: 480px) {
+  /* Verberg app-titel: tabs krijgen volledige headerruimte */
+  .header-left { display: none; }
+  header { gap: 6px; padding: 0 10px; }
+  .tab-btn { padding: 5px 10px; font-size: 12px; }
+  .tab-content { padding: 10px; }
+
+  /* Dag-header: compacter op smal scherm */
+  .dag-header { gap: 6px; }
+  .dag-title span:first-child { font-size: 15px; }
+  .dag-title span:last-child { font-size: 11px; }
+
+  /* Taakkaarten */
+  .task-card { gap: 8px; }
+  .task-omschrijving { font-size: 13px; }
+  .task-meta { gap: 3px; }
+
+  /* Filters en knoppen: vol breedte stapelen */
+  .filter-select, .reset-btn { width: 100%; box-sizing: border-box; }
+
+  /* Master-toolbar: Export + Import naast elkaar */
+  .master-toolbar > div:last-child { flex-wrap: wrap; }
+  #nieuwe-taak-btn { flex: 1 0 100%; }
+  #export-btn, #import-btn { flex: 1 0 calc(50% - 4px); text-align: center; }
+
+  /* Formulier: 1-kolom in modals */
+  .form-row.two-col { grid-template-columns: 1fr; }
+
+  /* Prioriteit-knoppen: 2 rijen van 5 */
+  .btn-groep-prio { flex-wrap: wrap; }
+  .btn-groep-prio button { flex: 0 0 calc(20% - 4px); min-height: 44px; }
+
+  /* Tijdstip picker: 3×4 en 2×4 grid */
   .picker-uur-rij { grid-template-columns: repeat(4, 1fr); }
   .picker-min-rij { grid-template-columns: repeat(4, 1fr); }
+
+  /* Matrix: hoogte vrij */
+  .matrix-grid { height: auto; }
+  .matrix-row, .matrix-header-row { grid-template-columns: 50px 1fr 1fr; }
+  .matrix-row-header { font-size: 11px; }
+
+  /* Archief toolbar */
+  .archief-toolbar { flex-direction: column; }
+  .archief-toolbar .filter-select { width: 100%; }
+
+  /* Standaard-dagacties modal: stapelen op smal scherm */
+  .standaard-rij { flex-wrap: wrap; }
+  .standaard-rij .standaard-naam-input { flex: 1 0 100%; order: -1; }
+  .standaard-nieuw-rij { flex-direction: column; }
+  .standaard-nieuw-rij > * { width: 100%; box-sizing: border-box; }
+  .standaard-dag-rij { flex-wrap: wrap; }
+  .standaard-dag-override { width: 100%; box-sizing: border-box; }
+}
+
+/* Kleine smartphones: 375px — iPhone SE, iPhone 16e ——————————————— */
+@media (max-width: 375px) {
+  .tab-btn { padding: 5px 8px; }
+  .dag-title span:first-child { font-size: 14px; }
+  #snel-werk-btn, #snel-prive-btn { font-size: 12px; padding: 8px 4px; }
+}
+
+/* Heel kleine schermen: 320px ———————————————————————————————————— */
+@media (max-width: 320px) {
+  .tab-btn { padding: 4px 7px; font-size: 11px; }
+  .nav-btn { width: 36px; height: 36px; font-size: 18px; }
+  .task-card { padding: 8px 6px; gap: 6px; }
+  .dag-title span:first-child { font-size: 13px; }
 }

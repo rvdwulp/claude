@@ -393,6 +393,7 @@ function initTijdstipPicker(containerId) {
   footer.appendChild(input);
 
   input.addEventListener('input', () => syncPickerButtons(container, input));
+  input.addEventListener('change', () => syncPickerButtons(container, input));
 
   container.innerHTML = '';
   container.appendChild(uurRij);
