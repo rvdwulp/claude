@@ -33,59 +33,53 @@ function laadData() {
 function slaData() {
   Storage.set('taken', taken);
   Storage.set('dagPlanning', dagPlanning);
-  syncFirebase();
+  clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(syncServer, 800);
 }
 
-// ===== FIREBASE SYNC =====
-let db = null;
+// ===== SERVER SYNC =====
 let syncTimeout = null;
 
-function initFirebase() {
+async function syncServer() {
+  const syncBtn = document.getElementById('sync-btn');
+  syncBtn.textContent = '⟳';
+  syncBtn.className = 'icon-btn';
   try {
-    if (typeof firebase !== 'undefined' && firebase.apps.length > 0) {
-      db = firebase.firestore();
-      laadVanFirebase();
-    }
-  } catch(e) { console.log('Firebase niet geconfigureerd, lokale opslag gebruikt'); }
-}
-
-function syncFirebase() {
-  if (!db) return;
-  clearTimeout(syncTimeout);
-  syncTimeout = setTimeout(async () => {
-    try {
-      const syncBtn = document.getElementById('sync-btn');
-      syncBtn.textContent = '⟳';
-      syncBtn.className = 'icon-btn';
-      await db.collection('data').doc('taken').set({ taken });
-      await db.collection('data').doc('dagPlanning').set({ dagPlanning });
+    const res = await fetch('save.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taken, dagPlanning })
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
       syncBtn.textContent = '✓';
       syncBtn.className = 'icon-btn synced';
-    } catch(e) {
-      const syncBtn = document.getElementById('sync-btn');
-      syncBtn.textContent = '!';
-      syncBtn.className = 'icon-btn error';
+    } else {
+      throw new Error(data.message);
     }
-  }, 1000);
+  } catch(e) {
+    syncBtn.textContent = '!';
+    syncBtn.className = 'icon-btn error';
+    console.error('Opslaan mislukt:', e);
+  }
 }
 
-async function laadVanFirebase() {
-  if (!db) return;
+async function laadVanServer() {
   try {
-    const [takenDoc, dagDoc] = await Promise.all([
-      db.collection('data').doc('taken').get(),
-      db.collection('data').doc('dagPlanning').get()
-    ]);
-    if (takenDoc.exists && takenDoc.data().taken) {
-      taken = takenDoc.data().taken;
+    const res = await fetch('save.php');
+    const data = await res.json();
+    if (Array.isArray(data.taken)) {
+      taken = data.taken;
       Storage.set('taken', taken);
     }
-    if (dagDoc.exists && dagDoc.data().dagPlanning) {
-      dagPlanning = dagDoc.data().dagPlanning;
+    if (data.dagPlanning && typeof data.dagPlanning === 'object') {
+      dagPlanning = data.dagPlanning;
       Storage.set('dagPlanning', dagPlanning);
     }
     renderAlles();
-  } catch(e) { console.error('Firebase laden mislukt', e); }
+  } catch(e) {
+    console.error('Laden van server mislukt, lokale opslag gebruikt:', e);
+  }
 }
 
 // ===== DATUM HELPERS =====
@@ -810,10 +804,7 @@ function renderAlles() {
 function wisselTab(naam) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === naam));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + naam));
-  if (naam === 'dag') {
-    if (db) laadVanFirebase().catch(() => renderDag());
-    else renderDag();
-  }
+  if (naam === 'dag') laadVanServer().catch(() => renderDag());
   if (naam === 'master') renderMaster();
   if (naam === 'matrix') renderMatrix();
   if (naam === 'archief') renderArchief();
@@ -823,8 +814,8 @@ function wisselTab(naam) {
 document.addEventListener('DOMContentLoaded', () => {
   laadData();
   carryForward();
-  initFirebase();
   renderAlles();
+  laadVanServer();
 
   // Tab navigatie
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -908,5 +899,5 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('archief-maand').value = new Date().toISOString().slice(0,7);
 
   // Sync knop
-  document.getElementById('sync-btn').addEventListener('click', () => laadVanFirebase().then(renderAlles));
+  document.getElementById('sync-btn').addEventListener('click', () => laadVanServer());
 });
