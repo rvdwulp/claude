@@ -27,11 +27,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $data = json_decode($inhoud, true);
         if ($data) {
             $data['heeftData'] = true;
+            // PHP encodes empty assoc arrays as [] instead of {}.
+            // Cast dagPlanning (and any empty day-entry) to stdClass so it encodes as {}.
+            if (isset($data['dagPlanning'])) {
+                if (empty($data['dagPlanning'])) {
+                    $data['dagPlanning'] = new stdClass();
+                } else {
+                    foreach ($data['dagPlanning'] as $dag => $planning) {
+                        if (empty($planning)) {
+                            $data['dagPlanning'][$dag] = new stdClass();
+                        }
+                    }
+                }
+            }
             echo json_encode($data);
         } else {
-            echo json_encode(['taken' => [], 'dagPlanning' => [], 'heeftData' => false]);
+            echo json_encode(['taken' => [], 'dagPlanning' => new stdClass(), 'heeftData' => false]);
         }
     } else {
-        echo json_encode(['taken' => [], 'dagPlanning' => [], 'heeftData' => false]);
+        echo json_encode(['taken' => [], 'dagPlanning' => new stdClass(), 'heeftData' => false]);
     }
 }
