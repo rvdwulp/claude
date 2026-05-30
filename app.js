@@ -28,9 +28,13 @@ function vandaagStr() {
 function laadData() {
   taken = Storage.get('taken', []);
   dagPlanning = Storage.get('dagPlanning', {});
+  const dagKeys = dagPlanning[vandaagStr()] ? Object.keys(dagPlanning[vandaagStr()]).filter(k => !k.startsWith('__')) : [];
+  console.log('[LOAD] taken:', taken.length, '| vandaag in dagPlanning:', dagKeys.length, dagKeys);
 }
 
 function slaData() {
+  const dagKeys = dagPlanning[vandaagStr()] ? Object.keys(dagPlanning[vandaagStr()]).filter(k => !k.startsWith('__')) : [];
+  console.log('[SAVE] taken:', taken.length, '| vandaag in dagPlanning:', dagKeys.length, dagKeys);
   Storage.set('taken', taken);
   Storage.set('dagPlanning', dagPlanning);
   clearTimeout(syncTimeout);
@@ -54,6 +58,7 @@ async function syncServer() {
     if (data.status === 'ok') {
       syncBtn.textContent = '✓';
       syncBtn.className = 'icon-btn synced';
+      console.log('[SYNC] ✓ opgeslagen op server');
     } else {
       throw new Error(data.message);
     }
@@ -61,7 +66,7 @@ async function syncServer() {
     syncBtn.textContent = '!';
     syncBtn.className = 'icon-btn error';
     syncBtn.title = e.message || 'Opslaan mislukt';
-    console.error('Opslaan mislukt:', e);
+    console.error('[SYNC] mislukt:', e.message);
   }
 }
 
@@ -69,6 +74,7 @@ async function laadVanServer() {
   try {
     const res = await fetch('save.php');
     const data = await res.json();
+    console.log('[SERVER] GET → heeftData:', data.heeftData, '| taken:', data.taken?.length, '| dagPlanning keys:', Object.keys(data.dagPlanning || {}).length);
     if (data.heeftData) {
       if (Array.isArray(data.taken)) {
         taken = data.taken;
@@ -81,7 +87,7 @@ async function laadVanServer() {
       renderAlles();
     }
   } catch(e) {
-    console.error('Laden van server mislukt:', e);
+    console.error('[SERVER] laden mislukt:', e.message);
   }
 }
 
@@ -140,6 +146,8 @@ function formatDatum(str) {
 // ===== RENDER DAG =====
 function renderDag() {
   const vandaag = vandaagStr();
+  const dagKeys = dagPlanning[huidigeDag] ? Object.keys(dagPlanning[huidigeDag]).filter(k => !k.startsWith('__')) : [];
+  console.log('[RENDER DAG]', huidigeDag, '| ids in planning:', dagKeys.length, '| taken totaal:', taken.length);
   document.getElementById('dag-datum').textContent = formatDatum(huidigeDag);
   document.getElementById('dag-label').textContent = huidigeDag === vandaag ? 'Vandaag' :
     huidigeDag > vandaag ? 'Toekomst' : 'Verleden';
@@ -818,9 +826,12 @@ document.addEventListener('DOMContentLoaded', () => {
   laadData();
   carryForward();
   renderAlles();
+  console.log('[INIT] localStorage: taken:', taken.length, '| dagPlanning datums:', Object.keys(dagPlanning).length);
   if (taken.length === 0 && Object.keys(dagPlanning).length === 0) {
+    console.log('[INIT] localStorage leeg → laden van server');
     laadVanServer();
   } else {
+    console.log('[INIT] localStorage heeft data → push naar server');
     syncServer();
   }
 
