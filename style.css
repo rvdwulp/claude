@@ -664,6 +664,38 @@ header h1 {
 
 .form-row.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
+.btn-groep {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+.btn-groep button {
+  flex: 1;
+  padding: 6px 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+.btn-groep button:hover { border-color: var(--primary); background: #eff6ff; }
+.btn-groep button.actief {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  font-weight: 700;
+}
+.btn-groep-prio button { font-size: 12px; padding: 6px 2px; }
+
+@media (max-width: 480px) {
+  .btn-groep-prio { flex-wrap: wrap; }
+  .btn-groep-prio button { flex: 0 0 calc(20% - 4px); }
+}
+
 .auto-indicatie {
   display: flex;
   gap: 8px;

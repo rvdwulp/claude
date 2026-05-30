@@ -582,18 +582,28 @@ function togglePriveVelden() {
 const THEMA_STANDAARD_PRIO = { IURC: 1, Overig: 2, AI: 3, Spreker: 3, Innovatie: 4, DHM: 5, TD: 6, EU: 8 };
 function standaardPrioVoorThema(thema) { return THEMA_STANDAARD_PRIO[thema] ?? 5; }
 
+function setModalWaarde(veld, waarde) {
+  document.getElementById('taak-' + veld).value = String(waarde);
+  const container = document.getElementById('taak-' + veld + '-btns');
+  if (container) {
+    container.querySelectorAll('button').forEach(btn => {
+      btn.classList.toggle('actief', btn.dataset.value === String(waarde));
+    });
+  }
+  if (veld === 'periode' || veld === 'prio') updateAutoIndicatie();
+}
+
 function openNieuweTaakModal() {
   bewerkTaakId = null;
   document.getElementById('modal-titel').textContent = 'Nieuwe taak';
   document.getElementById('taak-omschrijving').value = '';
   document.getElementById('taak-thema').value = 'IURC';
   document.getElementById('taak-type').value = 'zakelijk';
-  document.getElementById('taak-periode').value = 'B';
-  document.getElementById('taak-grootte').value = 'M';
-  document.getElementById('taak-prio').value = standaardPrioVoorThema('IURC');
+  setModalWaarde('periode', 'B');
+  setModalWaarde('grootte', 'M');
+  setModalWaarde('prio', standaardPrioVoorThema('IURC'));
   document.getElementById('taak-tijd').value = '';
   document.getElementById('taak-notities').value = '';
-  updateAutoIndicatie();
   togglePriveVelden();
   document.getElementById('modal-overlay').classList.remove('hidden');
   document.getElementById('taak-omschrijving').focus();
@@ -607,12 +617,11 @@ function bewerkTaak(taakId) {
   document.getElementById('taak-omschrijving').value = t.omschrijving;
   document.getElementById('taak-thema').value = t.thema || 'Overig';
   document.getElementById('taak-type').value = t.type;
-  document.getElementById('taak-periode').value = t.periode || 'B';
-  document.getElementById('taak-grootte').value = t.grootte || 'M';
-  document.getElementById('taak-prio').value = t.prio || 5;
+  setModalWaarde('periode', t.periode || 'B');
+  setModalWaarde('grootte', t.grootte || 'M');
+  setModalWaarde('prio', t.prio || 5);
   document.getElementById('taak-tijd').value = t.tijdstip || '';
   document.getElementById('taak-notities').value = t.notities || '';
-  updateAutoIndicatie();
   togglePriveVelden();
   document.getElementById('modal-overlay').classList.remove('hidden');
   document.getElementById('taak-omschrijving').focus();
@@ -724,30 +733,13 @@ function voegGeselecteerdeToe() {
   document.getElementById('select-modal-overlay').classList.add('hidden');
 }
 
-// ===== TAAK TOEVOEGEN AAN DAG (via volledig modal) =====
+// ===== TAAK TOEVOEGEN AAN DAG =====
 let voegToeAanDagNaSave = false;
+let snelModalType = 'zakelijk';
 
-function snelTaakToevoegen() {
-  voegToeAanDagNaSave = true;
-  // Stel defaults in die handig zijn voor een dag-taak
-  bewerkTaakId = null;
-  document.getElementById('modal-titel').textContent = 'Nieuwe taak voor vandaag';
-  document.getElementById('taak-omschrijving').value = '';
-  document.getElementById('taak-thema').value = 'Overig';
-  document.getElementById('taak-type').value = 'zakelijk';
-  document.getElementById('taak-periode').value = 'A';
-  document.getElementById('taak-grootte').value = 'K';
-  document.getElementById('taak-prio').value = 5;
-  document.getElementById('taak-tijd').value = '';
-  document.getElementById('taak-notities').value = '';
-  updateAutoIndicatie();
-  togglePriveVelden();
-  document.getElementById('modal-overlay').classList.remove('hidden');
-  document.getElementById('taak-omschrijving').focus();
-}
-
-// ===== SNEL TOEVOEGEN (alleen naam + tijd) =====
-function openSnelModal() {
+function openSnelModal(type) {
+  snelModalType = type || 'zakelijk';
+  document.getElementById('snel-modal-titel').textContent = snelModalType === 'prive' ? 'Snel privé' : 'Snel werk';
   document.getElementById('snel-onderwerp').value = '';
   document.getElementById('snel-tijd').value = '';
   document.getElementById('snel-modal-overlay').classList.remove('hidden');
@@ -763,7 +755,7 @@ function slaSnelModalOp() {
     id: genId(),
     omschrijving,
     thema: 'Overig',
-    type: 'zakelijk',
+    type: snelModalType,
     periode: 'A',
     grootte: 'K',
     prio: 5,
@@ -871,7 +863,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Dag acties
-  document.getElementById('taak-toevoegen-dag').addEventListener('click', snelTaakToevoegen);
+  document.getElementById('snel-werk-btn').addEventListener('click', () => openSnelModal('zakelijk'));
+  document.getElementById('snel-prive-btn').addEventListener('click', () => openSnelModal('prive'));
   document.getElementById('taken-selecteren').addEventListener('click', openSelecteerModal);
 
   // Master nieuw
@@ -899,9 +892,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Standaard prioriteit invullen bij thema-keuze (alleen bij nieuwe taak, niet bewerken)
   document.getElementById('taak-thema').addEventListener('change', () => {
     if (bewerkTaakId) return;
-    const thema = document.getElementById('taak-thema').value;
-    document.getElementById('taak-prio').value = standaardPrioVoorThema(thema);
-    updateAutoIndicatie();
+    setModalWaarde('prio', standaardPrioVoorThema(document.getElementById('taak-thema').value));
   });
 
   // Privé: verberg overige velden
@@ -917,7 +908,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('taak-omschrijving').addEventListener('keydown', e => { if (e.key === 'Enter') slaModalOp(); });
 
   // Snel toevoegen modal
-  document.getElementById('snel-toevoegen-btn').addEventListener('click', openSnelModal);
   document.getElementById('snel-modal-opslaan').addEventListener('click', slaSnelModalOp);
   document.getElementById('snel-modal-sluiten').addEventListener('click', sluitSnelModal);
   document.getElementById('snel-modal-annuleren').addEventListener('click', sluitSnelModal);

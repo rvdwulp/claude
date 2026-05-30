@@ -62,8 +62,8 @@
       </div>
 
       <div class="dag-actions">
-        <button id="taak-toevoegen-dag" class="primary-btn">+ Taak toevoegen</button>
-        <button id="snel-toevoegen-btn" class="secondary-btn">⚡ Snel (naam + tijd)</button>
+        <button id="snel-werk-btn" class="primary-btn">⚡ Snel werk</button>
+        <button id="snel-prive-btn" class="primary-btn">⚡ Snel privé</button>
         <button id="taken-selecteren" class="secondary-btn">Taken selecteren uit master</button>
       </div>
 
@@ -231,26 +231,40 @@
         <div class="form-row two-col" id="modal-periode-grootte-row">
           <div>
             <label>Periode</label>
-            <select id="taak-periode">
-              <option value="A">A – Nu</option>
-              <option value="B">B – &lt; 2 weken</option>
-              <option value="C">C – &gt; 2 weken</option>
-            </select>
+            <div class="btn-groep" id="taak-periode-btns">
+              <button type="button" data-value="A" onclick="setModalWaarde('periode','A')">A</button>
+              <button type="button" data-value="B" onclick="setModalWaarde('periode','B')">B</button>
+              <button type="button" data-value="C" onclick="setModalWaarde('periode','C')">C</button>
+            </div>
+            <input type="hidden" id="taak-periode" value="B">
           </div>
           <div>
             <label>Grootte</label>
-            <select id="taak-grootte">
-              <option value="K">K – &lt; 1 uur</option>
-              <option value="M">M – 2-3 uur</option>
-              <option value="L">L – 4-8 uur</option>
-              <option value="XL">XL – &gt; 8 uur</option>
-            </select>
+            <div class="btn-groep" id="taak-grootte-btns">
+              <button type="button" data-value="K" onclick="setModalWaarde('grootte','K')">K</button>
+              <button type="button" data-value="M" onclick="setModalWaarde('grootte','M')">M</button>
+              <button type="button" data-value="L" onclick="setModalWaarde('grootte','L')">L</button>
+              <button type="button" data-value="XL" onclick="setModalWaarde('grootte','XL')">XL</button>
+            </div>
+            <input type="hidden" id="taak-grootte" value="M">
           </div>
         </div>
         <div class="form-row two-col">
           <div id="modal-prio-container">
-            <label>Prioriteit (1-10)</label>
-            <input type="number" id="taak-prio" min="1" max="10" value="5">
+            <label>Prioriteit</label>
+            <div class="btn-groep btn-groep-prio" id="taak-prio-btns">
+              <button type="button" data-value="1" onclick="setModalWaarde('prio',1)">1</button>
+              <button type="button" data-value="2" onclick="setModalWaarde('prio',2)">2</button>
+              <button type="button" data-value="3" onclick="setModalWaarde('prio',3)">3</button>
+              <button type="button" data-value="4" onclick="setModalWaarde('prio',4)">4</button>
+              <button type="button" data-value="5" onclick="setModalWaarde('prio',5)">5</button>
+              <button type="button" data-value="6" onclick="setModalWaarde('prio',6)">6</button>
+              <button type="button" data-value="7" onclick="setModalWaarde('prio',7)">7</button>
+              <button type="button" data-value="8" onclick="setModalWaarde('prio',8)">8</button>
+              <button type="button" data-value="9" onclick="setModalWaarde('prio',9)">9</button>
+              <button type="button" data-value="10" onclick="setModalWaarde('prio',10)">10</button>
+            </div>
+            <input type="hidden" id="taak-prio" value="5">
           </div>
           <div>
             <label>Tijdstip (optioneel)</label>
@@ -317,7 +331,7 @@
   <div id="snel-modal-overlay" class="modal-overlay hidden">
     <div class="modal" style="max-width:360px">
       <div class="modal-header">
-        <h2>Snel toevoegen</h2>
+        <h2 id="snel-modal-titel">Snel toevoegen</h2>
         <button class="close-btn" id="snel-modal-sluiten">&#x2715;</button>
       </div>
       <div class="modal-body">
