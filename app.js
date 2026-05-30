@@ -26,8 +26,8 @@ function vandaagStr() {
 }
 
 function laadData() {
-  taken = Storage.get('taken', []);
-  dagPlanning = Storage.get('dagPlanning', {});
+  taken = Storage.get('actielijst_taken', []);
+  dagPlanning = Storage.get('actielijst_dagPlanning', {});
   const dagKeys = dagPlanning[vandaagStr()] ? Object.keys(dagPlanning[vandaagStr()]).filter(k => !k.startsWith('__')) : [];
   console.log('[LOAD] taken:', taken.length, '| vandaag in dagPlanning:', dagKeys.length, dagKeys);
 }
@@ -35,8 +35,8 @@ function laadData() {
 function slaData() {
   const dagKeys = dagPlanning[vandaagStr()] ? Object.keys(dagPlanning[vandaagStr()]).filter(k => !k.startsWith('__')) : [];
   console.log('[SAVE] taken:', taken.length, '| vandaag in dagPlanning:', dagKeys.length, dagKeys);
-  Storage.set('taken', taken);
-  Storage.set('dagPlanning', dagPlanning);
+  Storage.set('actielijst_taken', taken);
+  Storage.set('actielijst_dagPlanning', dagPlanning);
   clearTimeout(syncTimeout);
   syncTimeout = setTimeout(syncServer, 800);
 }
