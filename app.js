@@ -1022,13 +1022,14 @@ function voegStandaardenToeAanDag() {
   renderDag();
 }
 
-// ===== EXPORT =====
+// ===== EXPORT / IMPORT =====
 function exporteerData() {
   const exportData = {
     exportDatum: new Date().toISOString(),
-    versie: '1.0',
-    taken: taken,
-    dagPlanning: dagPlanning
+    versie: '1.1',
+    taken,
+    dagPlanning,
+    standaarden
   };
   const json = JSON.stringify(exportData, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
@@ -1040,6 +1041,75 @@ function exporteerData() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+function importeerData() {
+  document.getElementById('import-file-input').click();
+}
+
+function verwerkImportBestand(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    let data;
+    try {
+      data = JSON.parse(e.target.result);
+    } catch {
+      alert('Ongeldig bestand: kan de JSON niet lezen.');
+      return;
+    }
+
+    if (!data.versie || !Array.isArray(data.taken)) {
+      alert('Ongeldig formaat: versie-veld of taken-array ontbreekt.');
+      return;
+    }
+
+    const bevestigd = confirm(
+      'Wil je importeren?\n\nDit VOEGT toe aan je huidige data.\nDuplicaten worden overgeslagen op basis van taak-id (taken) en naam (standaarden).'
+    );
+    if (!bevestigd) {
+      document.getElementById('import-file-input').value = '';
+      return;
+    }
+
+    // Merge taken
+    const bestaandeIds = new Set(taken.map(t => t.id));
+    const nieuweTaken = data.taken.filter(t => t.id && !bestaandeIds.has(t.id));
+    taken.push(...nieuweTaken);
+
+    // Merge dagPlanning
+    let nieuweDagEntries = 0;
+    const importPlanning = normDagPlanning(data.dagPlanning || {});
+    for (const [dag, planning] of Object.entries(importPlanning)) {
+      if (!dagPlanning[dag]) {
+        dagPlanning[dag] = { ...planning };
+        nieuweDagEntries += Object.keys(planning).filter(k => !k.startsWith('__')).length;
+      } else {
+        for (const [id, info] of Object.entries(planning)) {
+          if (id.startsWith('__')) continue;
+          if (!dagPlanning[dag][id]) {
+            dagPlanning[dag][id] = info;
+            nieuweDagEntries++;
+          }
+        }
+      }
+    }
+
+    // Merge standaarden
+    const bestaandeNamen = new Set(standaarden.map(s => s.naam.toLowerCase()));
+    const nieuweStandaarden = (data.standaarden || []).filter(
+      s => s.naam && !bestaandeNamen.has(s.naam.toLowerCase())
+    );
+    standaarden.push(...nieuweStandaarden);
+    Storage.set('actielijst_standaarden', standaarden);
+
+    slaData();
+    renderAlles();
+
+    document.getElementById('import-file-input').value = '';
+    alert(`Geïmporteerd: ${nieuweTaken.length} taken, ${nieuweDagEntries} dag-entries en ${nieuweStandaarden.length} standaarden.`);
+  };
+  reader.readAsText(file);
 }
 
 // ===== HELPERS =====
@@ -1143,6 +1213,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Master nieuw
   document.getElementById('nieuwe-taak-btn').addEventListener('click', openNieuweTaakModal);
   document.getElementById('export-btn').addEventListener('click', exporteerData);
+  document.getElementById('import-btn').addEventListener('click', importeerData);
+  document.getElementById('import-file-input').addEventListener('change', function() {
+    verwerkImportBestand(this.files[0]);
+  });
 
   // Master filters
   ['filter-thema','filter-periode','filter-grootte','filter-type','filter-prio','filter-status'].forEach(id => {

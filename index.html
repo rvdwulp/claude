@@ -134,9 +134,11 @@
             <option value="aangemaakt">Aangemaakt</option>
           </select>
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button id="nieuwe-taak-btn" class="primary-btn">+ Nieuwe taak</button>
-          <button id="export-btn" class="secondary-btn" title="Exporteer alle taken">&#128229; Exporteer</button>
+          <button id="export-btn" class="secondary-btn" title="Exporteer alle taken als JSON">&#128229; Exporteer</button>
+          <button id="import-btn" class="secondary-btn" title="Importeer taken uit JSON">&#128228; Importeer</button>
+          <input type="file" id="import-file-input" accept=".json" style="display:none">
         </div>
       </div>
 
