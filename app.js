@@ -51,8 +51,8 @@ async function syncServer() {
   try {
     const res = await fetch('save.php', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taken, dagPlanning })
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'd=' + encodeURIComponent(JSON.stringify({ taken, dagPlanning }))
     });
     const data = await res.json();
     if (data.status === 'ok') {

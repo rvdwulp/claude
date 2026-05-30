@@ -1,0 +1,5 @@
+<Files "save.php">
+  <LimitExcept GET POST>
+    Deny from all
+  </LimitExcept>
+</Files>

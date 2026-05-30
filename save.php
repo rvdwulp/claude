@@ -4,7 +4,8 @@ header('Content-Type: application/json');
 $file = __DIR__ . '/data.json';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $input = file_get_contents('php://input');
+    // Accept both form-encoded (d=...) and raw JSON body
+    $input = isset($_POST['d']) ? $_POST['d'] : file_get_contents('php://input');
     $decoded = json_decode($input, true);
     if ($decoded === null || !isset($decoded['taken'], $decoded['dagPlanning'])) {
         http_response_code(400);
