@@ -16,6 +16,7 @@ let bewerkTaakId = null;
 let geselecteerdVoorDag = new Set();
 let dragSrcId = null;
 let dragSrcSectie = null;
+let localGevijzigd = false;  // true zodra de gebruiker iets wijzigt in deze sessie
 
 function localDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -31,6 +32,7 @@ function laadData() {
 }
 
 function slaData() {
+  localGevijzigd = true;
   Storage.set('taken', taken);
   Storage.set('dagPlanning', dagPlanning);
   clearTimeout(syncTimeout);
@@ -69,7 +71,7 @@ async function laadVanServer() {
   try {
     const res = await fetch('save.php');
     const data = await res.json();
-    if (data.heeftData) {
+    if (data.heeftData && !localGevijzigd) {
       if (Array.isArray(data.taken)) {
         taken = data.taken;
         Storage.set('taken', taken);
@@ -903,5 +905,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('archief-maand').value = new Date().toISOString().slice(0,7);
 
   // Sync knop
-  document.getElementById('sync-btn').addEventListener('click', () => laadVanServer());
+  document.getElementById('sync-btn').addEventListener('click', () => {
+    clearTimeout(syncTimeout);
+    syncServer();
+  });
 });
