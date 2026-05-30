@@ -68,17 +68,20 @@ async function laadVanServer() {
   try {
     const res = await fetch('save.php');
     const data = await res.json();
-    if (Array.isArray(data.taken)) {
-      taken = data.taken;
-      Storage.set('taken', taken);
-    }
-    if (data.dagPlanning && typeof data.dagPlanning === 'object') {
-      dagPlanning = data.dagPlanning;
-      Storage.set('dagPlanning', dagPlanning);
+    if (data.heeftData) {
+      if (Array.isArray(data.taken)) {
+        taken = data.taken;
+        Storage.set('taken', taken);
+      }
+      if (data.dagPlanning && typeof data.dagPlanning === 'object') {
+        dagPlanning = data.dagPlanning;
+        Storage.set('dagPlanning', dagPlanning);
+      }
     }
     renderAlles();
   } catch(e) {
     console.error('Laden van server mislukt, lokale opslag gebruikt:', e);
+    renderAlles();
   }
 }
 

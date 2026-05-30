@@ -11,12 +11,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode(['status' => 'error', 'message' => 'Ongeldige data']);
         exit;
     }
-    file_put_contents($file, $input, LOCK_EX);
-    echo json_encode(['status' => 'ok']);
+    $bytes = file_put_contents($file, $input, LOCK_EX);
+    if ($bytes === false) {
+        http_response_code(500);
+        echo json_encode(['status' => 'error', 'message' => 'Schrijven mislukt — controleer schrijfrechten op data.json']);
+    } else {
+        echo json_encode(['status' => 'ok']);
+    }
 } else {
     if (file_exists($file)) {
-        echo file_get_contents($file);
+        $inhoud = file_get_contents($file);
+        $data = json_decode($inhoud, true);
+        if ($data) {
+            $data['heeftData'] = true;
+            echo json_encode($data);
+        } else {
+            echo json_encode(['taken' => [], 'dagPlanning' => [], 'heeftData' => false]);
+        }
     } else {
-        echo json_encode(['taken' => [], 'dagPlanning' => []]);
+        echo json_encode(['taken' => [], 'dagPlanning' => [], 'heeftData' => false]);
     }
 }
