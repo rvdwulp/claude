@@ -466,6 +466,7 @@ function renderMaster() {
     if (grootte && t.grootte !== grootte) return false;
     if (type && t.type !== type) return false;
     if (prio && String(t.prio) !== prio) return false;
+    if (status === 'actief_wachten' && t.afgerond && !t.altijdBewaren) return false;
     if (status === 'actief' && (t.afgerond || t.wachten) && !t.altijdBewaren) return false;
     if (status === 'wachten' && !t.wachten) return false;
     if (status === 'afgerond' && !t.afgerond) return false;
@@ -695,11 +696,22 @@ function renderArchief() {
               ${t.dagInfo.overgenomen && !isVerwijderd ? '<span class="badge" style="background:#fef3c7;color:#92400e">Overgenomen</span>' : ''}
             </div>
           </div>
+          ${isVerwijderd ? `<div class="task-actions" style="opacity:1">
+            <button class="task-action-btn btn-delete" onclick="definitiefVerwijder('${t.id}', event)" data-tooltip="Definitief verwijderen">&#x1F5D1;</button>
+          </div>` : ''}
         </div>`;
       }).join('')}
     </div>`;
   }).join('');
   berekenEnSlaRecords();
+}
+
+function definitiefVerwijder(taakId, event) {
+  event.stopPropagation();
+  if (!confirm('Deze taak definitief verwijderen uit alle data? Dit kan niet ongedaan worden gemaakt.')) return;
+  taken = taken.filter(t => t.id !== taakId);
+  slaData();
+  renderArchief();
 }
 
 // ===== MODAL TAAK =====
@@ -1173,7 +1185,7 @@ function naarMasterKwadrant(u, b) {
   ['filter-thema','filter-periode','filter-grootte','filter-type','filter-prio'].forEach(id => {
     document.getElementById(id).value = '';
   });
-  document.getElementById('filter-status').value = 'actief';
+  document.getElementById('filter-status').value = 'actief_wachten';
   document.getElementById('master-sortering').value = 'thema';
   wisselTab('master');
 }
@@ -1295,6 +1307,8 @@ function renderStatistieken() {
   const afgerondDezeMaand = afgerond.filter(t => t.afgerondDatum?.startsWith(maandPrefix)).length;
   const inDagVandaag = Object.keys(dagPlanning[vandaag] || {}).filter(k => !k.startsWith('__')).length;
 
+  function fmtUur(u) { return u === 0 ? '0u' : u % 1 === 0 ? u + 'u' : u.toFixed(1) + 'u'; }
+
   // --- Overzicht ---
   const overzichtHTML = `<div class="stats-sectie">
     <div class="stats-sectie-titel">Overzicht</div>
@@ -1307,16 +1321,24 @@ function renderStatistieken() {
     </div>
   </div>`;
 
-  // --- Per thema (uren actief) ---
+  // --- Per thema (aantal + uren actief) ---
   const themas = ['IURC','AI','Innovatie','DHM','TD','EU','Spreker','Overig'];
   const themaKleuren = { IURC:'#1d4ed8', AI:'#6d28d9', Innovatie:'#15803d', DHM:'#c2410c', TD:'#0d9488', EU:'#3730a3', Spreker:'#be185d', Overig:'#475569' };
-  const perThemaUren = {};
-  themas.forEach(t => perThemaUren[t] = 0);
-  actief.forEach(t => { if (perThemaUren[t.thema] !== undefined) perThemaUren[t.thema] += urenVoorTaak(t); });
-  const maxThema = Math.max(...Object.values(perThemaUren), 0.1);
+  const perThemaCount = {}, perThemaUren = {};
+  themas.forEach(t => { perThemaCount[t] = 0; perThemaUren[t] = 0; });
+  actief.forEach(t => {
+    if (perThemaCount[t.thema] !== undefined) { perThemaCount[t.thema]++; perThemaUren[t.thema] += urenVoorTaak(t); }
+  });
+  const maxThemaCount = Math.max(...Object.values(perThemaCount), 0.1);
+  const maxThemaUren = Math.max(...Object.values(perThemaUren), 0.1);
   const themaHTML = `<div class="stats-sectie">
-    <div class="stats-sectie-titel">Per thema — uren actief</div>
-    <div class="stat-bars">${themas.map(t => statBar(t, perThemaUren[t], maxThema, themaKleuren[t], 'uur')).join('')}</div>
+    <div class="stats-sectie-titel">Per thema — actief</div>
+    <div class="stat-bars">
+      <div class="stat-bars-subheader">Aantal taken</div>
+      ${themas.map(t => statBar(t, perThemaCount[t], maxThemaCount, themaKleuren[t])).join('')}
+      <div class="stat-bars-subheader">Geschatte uren</div>
+      ${themas.map(t => statBar(t, perThemaUren[t], maxThemaUren, themaKleuren[t], 'uur')).join('')}
+    </div>
   </div>`;
 
   // --- Per kwadrant (klikbaar naar master) ---
@@ -1341,64 +1363,91 @@ function renderStatistieken() {
     </div>
   </div>`;
 
-  // --- Per prioriteit (uren actief) ---
-  const perPrioUren = {};
-  for (let i = 1; i <= 10; i++) perPrioUren[i] = 0;
-  actief.forEach(t => { if (t.prio >= 1 && t.prio <= 10) perPrioUren[t.prio] += urenVoorTaak(t); });
-  const maxPrio = Math.max(...Object.values(perPrioUren), 0.1);
+  // --- Per prioriteit (aantal + uren actief) ---
+  const perPrioCount = {}, perPrioUren = {};
+  for (let i = 1; i <= 10; i++) { perPrioCount[i] = 0; perPrioUren[i] = 0; }
+  actief.forEach(t => {
+    if (t.prio >= 1 && t.prio <= 10) { perPrioCount[t.prio]++; perPrioUren[t.prio] += urenVoorTaak(t); }
+  });
+  const maxPrioCount = Math.max(...Object.values(perPrioCount), 0.1);
+  const maxPrioUren = Math.max(...Object.values(perPrioUren), 0.1);
+  const prioKleur = p => parseInt(p) <= 3 ? '#dc2626' : parseInt(p) <= 6 ? '#d97706' : '#94a3b8';
   const prioHTML = `<div class="stats-sectie">
-    <div class="stats-sectie-titel">Per prioriteit — uren actief</div>
+    <div class="stats-sectie-titel">Per prioriteit — actief</div>
     <div class="stat-bars">
-      ${Object.entries(perPrioUren).map(([p, u]) => statBar('P'+p, u, maxPrio, parseInt(p) <= 3 ? '#dc2626' : parseInt(p) <= 6 ? '#d97706' : '#94a3b8', 'uur')).join('')}
+      <div class="stat-bars-subheader">Aantal taken</div>
+      ${Object.entries(perPrioCount).map(([p, n]) => statBar('P'+p, n, maxPrioCount, prioKleur(p))).join('')}
+      <div class="stat-bars-subheader">Geschatte uren</div>
+      ${Object.entries(perPrioUren).map(([p, u]) => statBar('P'+p, u, maxPrioUren, prioKleur(p), 'uur')).join('')}
     </div>
   </div>`;
 
-  // --- Per weekdag (uren afgerond) ---
+  // --- Per weekdag (aantal + uren afgerond) ---
   const dagNamen = ['Ma','Di','Wo','Do','Vr','Za','Zo'];
+  const perWeekdagCount = [0,0,0,0,0,0,0];
   const perWeekdagUren = [0,0,0,0,0,0,0];
   afgerond.forEach(t => {
     if (!t.afgerondDatum) return;
-    const dag = new Date(t.afgerondDatum + 'T00:00:00').getDay();
-    perWeekdagUren[dag === 0 ? 6 : dag - 1] += urenVoorTaak(t);
+    const idx = new Date(t.afgerondDatum + 'T00:00:00').getDay();
+    const i = idx === 0 ? 6 : idx - 1;
+    perWeekdagCount[i]++;
+    perWeekdagUren[i] += urenVoorTaak(t);
   });
-  const maxWeekdag = Math.max(...perWeekdagUren, 0.1);
+  const maxWeekdagCount = Math.max(...perWeekdagCount, 0.1);
+  const maxWeekdagUren = Math.max(...perWeekdagUren, 0.1);
   const weekdagHTML = `<div class="stats-sectie">
-    <div class="stats-sectie-titel">Per weekdag — uren afgerond</div>
-    <div class="stat-bars">${dagNamen.map((n, i) => statBar(n, perWeekdagUren[i], maxWeekdag, null, 'uur')).join('')}</div>
+    <div class="stats-sectie-titel">Per weekdag — afgerond</div>
+    <div class="stat-bars">
+      <div class="stat-bars-subheader">Aantal taken</div>
+      ${dagNamen.map((n, i) => statBar(n, perWeekdagCount[i], maxWeekdagCount, null)).join('')}
+      <div class="stat-bars-subheader">Geschatte uren</div>
+      ${dagNamen.map((n, i) => statBar(n, perWeekdagUren[i], maxWeekdagUren, null, 'uur')).join('')}
+    </div>
   </div>`;
 
-  // --- Per week (uren afgerond, last 12) ---
+  // --- Per week (aantal + uren afgerond, last 12) ---
   const mondays = getLast12Mondays();
-  const perWeekUren = {};
-  mondays.forEach(m => perWeekUren[m] = 0);
+  const perWeekCount = {}, perWeekUren = {};
+  mondays.forEach(m => { perWeekCount[m] = 0; perWeekUren[m] = 0; });
   afgerond.forEach(t => {
     if (!t.afgerondDatum) return;
     const mon = getMondayStr(new Date(t.afgerondDatum + 'T00:00:00'));
-    if (perWeekUren[mon] !== undefined) perWeekUren[mon] += urenVoorTaak(t);
+    if (perWeekCount[mon] !== undefined) { perWeekCount[mon]++; perWeekUren[mon] += urenVoorTaak(t); }
   });
-  const maxWeek = Math.max(...Object.values(perWeekUren), 0.1);
+  const maxWeekCount = Math.max(...Object.values(perWeekCount), 0.1);
+  const maxWeekUren = Math.max(...Object.values(perWeekUren), 0.1);
   const weekHTML = `<div class="stats-sectie">
-    <div class="stats-sectie-titel">Per week — uren afgerond (laatste 12 weken)</div>
-    <div class="stat-bars">${mondays.map(m => statBar(formatWeekLabel(m), perWeekUren[m], maxWeek, null, 'uur')).join('')}</div>
+    <div class="stats-sectie-titel">Per week — afgerond (laatste 12 weken)</div>
+    <div class="stat-bars">
+      <div class="stat-bars-subheader">Aantal taken</div>
+      ${mondays.map(m => statBar(formatWeekLabel(m), perWeekCount[m], maxWeekCount, null)).join('')}
+      <div class="stat-bars-subheader">Geschatte uren</div>
+      ${mondays.map(m => statBar(formatWeekLabel(m), perWeekUren[m], maxWeekUren, null, 'uur')).join('')}
+    </div>
   </div>`;
 
-  // --- Per maand (uren afgerond, last 6) ---
+  // --- Per maand (aantal + uren afgerond, last 6) ---
   const maanden = getLast6Months();
-  const perMaandUren = {};
-  maanden.forEach(m => perMaandUren[m] = 0);
+  const perMaandCount = {}, perMaandUren = {};
+  maanden.forEach(m => { perMaandCount[m] = 0; perMaandUren[m] = 0; });
   afgerond.forEach(t => {
     if (!t.afgerondDatum) return;
     const prefix = t.afgerondDatum.slice(0, 7);
-    if (perMaandUren[prefix] !== undefined) perMaandUren[prefix] += urenVoorTaak(t);
+    if (perMaandCount[prefix] !== undefined) { perMaandCount[prefix]++; perMaandUren[prefix] += urenVoorTaak(t); }
   });
-  const maxMaand = Math.max(...Object.values(perMaandUren), 0.1);
+  const maxMaandCount = Math.max(...Object.values(perMaandCount), 0.1);
+  const maxMaandUren = Math.max(...Object.values(perMaandUren), 0.1);
   const maandHTML = `<div class="stats-sectie">
-    <div class="stats-sectie-titel">Per maand — uren afgerond (laatste 6 maanden)</div>
-    <div class="stat-bars">${maanden.map(m => statBar(formatMaand(m), perMaandUren[m], maxMaand, null, 'uur')).join('')}</div>
+    <div class="stats-sectie-titel">Per maand — afgerond (laatste 6 maanden)</div>
+    <div class="stat-bars">
+      <div class="stat-bars-subheader">Aantal taken</div>
+      ${maanden.map(m => statBar(formatMaand(m), perMaandCount[m], maxMaandCount, null)).join('')}
+      <div class="stat-bars-subheader">Geschatte uren</div>
+      ${maanden.map(m => statBar(formatMaand(m), perMaandUren[m], maxMaandUren, null, 'uur')).join('')}
+    </div>
   </div>`;
 
-  // --- Interessante statistieken ---
-  // Streak berekenen
+  // --- Statistieken onderaan ---
   const gedaanDagen = new Set();
   for (const [dag, planning] of Object.entries(dagPlanning)) {
     if (Object.entries(planning).some(([k, v]) => !k.startsWith('__') && v.gedaan)) gedaanDagen.add(dag);
@@ -1418,7 +1467,9 @@ function renderStatistieken() {
   const hoogPrioActief = actief.filter(t => t.prio <= 3).length;
   const wachtenActief = taken.filter(t => !t.verwijderd && !t.isStandaard && t.wachten).length;
   const besteDag = records.besteDagen?.[0];
+  const tweedeBesteDag = records.besteDagen?.[1];
   const besteMaand = records.besteMaanden?.[0];
+  const tweedeBesteMaand = records.besteMaanden?.[1];
 
   let bestPct = 0, bestPctDag = '';
   for (const [dag, planning] of Object.entries(dagPlanning)) {
@@ -1429,31 +1480,56 @@ function renderStatistieken() {
     }
   }
 
-  function fmtUur(u) { return u % 1 === 0 ? u + ' uur' : u.toFixed(1) + ' uur'; }
-
-  const statItems = [
-    { label: 'Beste dag ooit', val: besteDag ? besteDag.aantalGedaan + ' taken' : '—', detail: besteDag ? formatDatum(besteDag.datum) : 'Nog geen data' },
-    { label: 'Beste maand ooit', val: besteMaand ? besteMaand.totaalGedaan + ' taken' : '—', detail: besteMaand ? formatMaand(besteMaand.maand) + ' · gem ' + besteMaand.gemDagelijks + '/dag' : 'Nog geen data' },
-    { label: 'Langste streak', val: maxStreak + (maxStreak === 1 ? ' dag' : ' dagen'), detail: 'Opeenvolgende werkdagen' },
-    { label: 'Totaal afgerond', val: afgerond.length + ' taken', detail: 'Alle tijden' },
-    { label: 'Actieve werkdruk', val: fmtUur(actieveUren), detail: actief.length + ' actieve taken' },
-    { label: 'Gem. uren/week', val: fmtUur(weekGem), detail: 'Afgerond, laatste 12 weken' },
-    { label: 'Beste dag %', val: bestPct ? Math.round(bestPct) + '%' : '—', detail: bestPctDag ? formatDatum(bestPctDag) : 'Minimaal 3 taken/dag nodig' },
-    { label: 'Hoge prio (P1-3)', val: hoogPrioActief + ' actief', detail: 'Dringendste taken' },
-    { label: 'Op wachten', val: wachtenActief + ' taken', detail: 'Geblokkeerd / wachtend' },
-    { label: 'Afgerond 2e top dag', val: records.besteDagen?.[1] ? records.besteDagen[1].aantalGedaan + ' taken' : '—', detail: records.besteDagen?.[1] ? formatDatum(records.besteDagen[1].datum) : '' },
-    { label: 'Afgerond 2e top maand', val: records.besteMaanden?.[1] ? records.besteMaanden[1].totaalGedaan + ' taken' : '—', detail: records.besteMaanden?.[1] ? formatMaand(records.besteMaanden[1].maand) : '' },
-    { label: 'Afgerond deze week', val: afgerondDezeWeek + ' taken', detail: 'Lopende week' },
-  ];
+  const grootteBreakdown = ['K','M','L','XL'].map(g => {
+    const n = actief.filter(t => t.grootte === g).length;
+    return n > 0 ? `<span class="stat-highlight-grootte">${g}: ${n}</span>` : '';
+  }).filter(Boolean).join('');
 
   const statHTML = `<div class="stats-sectie">
     <div class="stats-sectie-titel">Statistieken</div>
+    <div class="stat-highlight-card">
+      <div class="stat-highlight-main">
+        <div class="stat-highlight-val">${fmtUur(actieveUren)}</div>
+        <div class="stat-highlight-label">Actieve werkdruk</div>
+        <div class="stat-highlight-sub">${actief.length} actieve taken</div>
+      </div>
+      ${grootteBreakdown ? `<div class="stat-highlight-breakdown">${grootteBreakdown}</div>` : ''}
+    </div>
+    <div class="stat-record-2col">
+      <div class="stat-record-col">
+        <div class="stat-record-col-titel">Beste dag</div>
+        <div class="stat-record-card stat-record-card-top">
+          <div class="stat-record-val">${besteDag ? besteDag.aantalGedaan + ' taken' : '—'}</div>
+          <div class="stat-record-label">#1 dag ooit</div>
+          <div class="stat-record-detail">${besteDag ? formatDatum(besteDag.datum) : 'Nog geen data'}</div>
+        </div>
+        <div class="stat-record-card">
+          <div class="stat-record-val">${tweedeBesteDag ? tweedeBesteDag.aantalGedaan + ' taken' : '—'}</div>
+          <div class="stat-record-label">#2 dag ooit</div>
+          <div class="stat-record-detail">${tweedeBesteDag ? formatDatum(tweedeBesteDag.datum) : ''}</div>
+        </div>
+      </div>
+      <div class="stat-record-col">
+        <div class="stat-record-col-titel">Beste maand</div>
+        <div class="stat-record-card stat-record-card-top">
+          <div class="stat-record-val">${besteMaand ? besteMaand.totaalGedaan + ' taken' : '—'}</div>
+          <div class="stat-record-label">#1 maand ooit</div>
+          <div class="stat-record-detail">${besteMaand ? formatMaand(besteMaand.maand) + ' · gem ' + besteMaand.gemDagelijks + '/dag' : 'Nog geen data'}</div>
+        </div>
+        <div class="stat-record-card">
+          <div class="stat-record-val">${tweedeBesteMaand ? tweedeBesteMaand.totaalGedaan + ' taken' : '—'}</div>
+          <div class="stat-record-label">#2 maand ooit</div>
+          <div class="stat-record-detail">${tweedeBesteMaand ? formatMaand(tweedeBesteMaand.maand) + ' · gem ' + tweedeBesteMaand.gemDagelijks + '/dag' : ''}</div>
+        </div>
+      </div>
+    </div>
     <div class="stat-record-grid">
-      ${statItems.map(s => `<div class="stat-record-card">
-        <div class="stat-record-val">${s.val}</div>
-        <div class="stat-record-label">${s.label}</div>
-        ${s.detail ? `<div class="stat-record-detail">${s.detail}</div>` : ''}
-      </div>`).join('')}
+      <div class="stat-record-card"><div class="stat-record-val">${maxStreak + (maxStreak === 1 ? ' dag' : ' dagen')}</div><div class="stat-record-label">Langste streak</div><div class="stat-record-detail">Opeenvolgende werkdagen</div></div>
+      <div class="stat-record-card"><div class="stat-record-val">${afgerond.length} taken</div><div class="stat-record-label">Totaal afgerond</div><div class="stat-record-detail">Alle tijden</div></div>
+      <div class="stat-record-card"><div class="stat-record-val">${fmtUur(weekGem)}</div><div class="stat-record-label">Gem. uren/week</div><div class="stat-record-detail">Afgerond, laatste 12 weken</div></div>
+      <div class="stat-record-card"><div class="stat-record-val">${bestPct ? Math.round(bestPct) + '%' : '—'}</div><div class="stat-record-label">Beste dag %</div><div class="stat-record-detail">${bestPctDag ? formatDatum(bestPctDag) : 'Minimaal 3 taken/dag'}</div></div>
+      <div class="stat-record-card"><div class="stat-record-val">${hoogPrioActief} actief</div><div class="stat-record-label">Hoge prio (P1-3)</div><div class="stat-record-detail">Dringendste taken</div></div>
+      <div class="stat-record-card"><div class="stat-record-val">${wachtenActief} taken</div><div class="stat-record-label">Op wachten</div><div class="stat-record-detail">Geblokkeerd / wachtend</div></div>
     </div>
   </div>`;
 
@@ -1583,7 +1659,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ['filter-thema','filter-periode','filter-grootte','filter-type','filter-prio'].forEach(id => {
       document.getElementById(id).value = '';
     });
-    document.getElementById('filter-status').value = 'actief';
+    document.getElementById('filter-status').value = 'actief_wachten';
     document.getElementById('master-sortering').value = 'thema';
     renderMaster();
   });
