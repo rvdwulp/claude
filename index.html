@@ -119,6 +119,7 @@
           </select>
           <select id="filter-status" class="filter-select">
             <option value="actief">Actief</option>
+            <option value="wachten">Wachten</option>
             <option value="afgerond">Afgerond</option>
             <option value="terugkerend">Terugkerend</option>
             <option value="">Alles</option>
@@ -209,7 +210,10 @@
     <div class="modal">
       <div class="modal-header">
         <h2 id="modal-titel">Nieuwe taak</h2>
-        <button class="close-btn" id="modal-sluiten">✕</button>
+        <div class="modal-header-actions">
+          <button class="primary-btn modal-save-top-btn" id="modal-opslaan-top">Opslaan</button>
+          <button class="close-btn" id="modal-sluiten">✕</button>
+        </div>
       </div>
       <div class="modal-body">
         <div class="form-row">
