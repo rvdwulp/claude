@@ -1225,6 +1225,12 @@ header h1 {
 .stat-bars-compact .stat-bar-label { font-size: 10px; min-width: 28px; }
 .stat-bars-compact .stat-bar-waarde { font-size: 10px; min-width: 28px; }
 
+.line-chart-wrap {
+  margin: 4px 0 10px;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
 .stat-highlight-card {
   background: linear-gradient(135deg, #1e40af 0%, #1d4ed8 100%);
   color: #fff;

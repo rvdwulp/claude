@@ -1333,6 +1333,53 @@ function statBar(label, val, max, kleur, unit) {
   </div>`;
 }
 
+function lineChart(chartId, labels, values, kleur, unit) {
+  const n = values.length;
+  if (n === 0) return '';
+  const W = 600, H = 130;
+  const pl = 36, pr = 8, pt = 10, pb = 24;
+  const iW = W - pl - pr, iH = H - pt - pb;
+  const maxVal = Math.max(...values, 0.001);
+  const col = kleur || '#2563eb';
+  const gradId = 'grad-' + chartId;
+  const fmtV = v => unit === 'uur'
+    ? (v === 0 ? '0u' : v % 1 === 0 ? v + 'u' : v.toFixed(1) + 'u')
+    : String(Math.round(v));
+  const px = i => pl + (n > 1 ? i / (n - 1) : 0.5) * iW;
+  const py = v => pt + iH - (v / maxVal) * iH;
+  const pts = values.map((v, i) => `${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
+  const area = `${pl},${pt + iH} ${pts} ${px(n - 1).toFixed(1)},${pt + iH}`;
+  // grid lines at 25%, 50%, 75%
+  const grid = [0.25, 0.5, 0.75, 1].map(f => {
+    const v = maxVal * f, yp = py(v).toFixed(1);
+    return `<line x1="${pl}" y1="${yp}" x2="${pl + iW}" y2="${yp}" stroke="#e2e8f0" stroke-width="0.5" stroke-dasharray="3,3"/>
+      <text x="${pl - 3}" y="${(parseFloat(yp) + 3).toFixed(1)}" text-anchor="end" font-size="8.5" fill="#94a3b8">${fmtV(Math.round(maxVal * f))}</text>`;
+  }).join('');
+  // x-axis labels: show 1st-of-month markers (contain '/'), and for <=14 pts show all
+  const xLabels = labels.map((lbl, i) => {
+    const show = n <= 14 || i === 0 || i === n - 1 || String(lbl).includes('/') || (n <= 30 && i % 5 === 0) || (n > 30 && i % 10 === 0);
+    if (!show) return '';
+    return `<text x="${px(i).toFixed(1)}" y="${H - 3}" text-anchor="middle" font-size="9" fill="#94a3b8">${escHtml(String(lbl))}</text>`;
+  }).join('');
+  // dots only when few points
+  const dots = n <= 20 ? values.map((v, i) =>
+    `<circle cx="${px(i).toFixed(1)}" cy="${py(v).toFixed(1)}" r="3" fill="${col}" stroke="white" stroke-width="1.5"/>`)
+    .join('') : '';
+  return `<div class="line-chart-wrap"><svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block">
+    <defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${col}" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="${col}" stop-opacity="0.02"/>
+    </linearGradient></defs>
+    ${grid}
+    <line x1="${pl}" y1="${pt}" x2="${pl}" y2="${pt + iH}" stroke="#cbd5e1" stroke-width="1"/>
+    <line x1="${pl}" y1="${pt + iH}" x2="${pl + iW}" y2="${pt + iH}" stroke="#cbd5e1" stroke-width="1"/>
+    <polygon points="${area}" fill="url(#${gradId})"/>
+    <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}
+    ${xLabels}
+  </svg></div>`;
+}
+
 const UREN_GROOTTE = { K: 0.5, M: 2, L: 5, XL: 10 };
 function urenVoorTaak(t) { return UREN_GROOTTE[t.grootte] || 1; }
 
@@ -1507,14 +1554,13 @@ function renderStatistieken() {
     const dd = new Date(d + 'T00:00:00');
     return dd.getDate() === 1 ? `${dd.getDate()}/${dd.getMonth()+1}` : String(dd.getDate());
   };
+  const wd60Labels = last60Days.map(dagLabel60);
   const werkdruk60HTML = `<div class="stats-sectie">
     <div class="stats-sectie-titel">Openstaande werkdruk — laatste 60 dagen</div>
-    <div class="stat-bars stat-bars-compact">
-      <div class="stat-bars-subheader">Aantal taken</div>
-      ${last60Days.map(d => statBar(dagLabel60(d), wdCount60[d], maxWd60Count, null)).join('')}
-      <div class="stat-bars-subheader">Geschatte uren</div>
-      ${last60Days.map(d => statBar(dagLabel60(d), wdUren60[d], maxWd60Uren, null, 'uur')).join('')}
-    </div>
+    <div class="stat-bars-subheader" style="margin-top:0">Aantal taken</div>
+    ${lineChart('wd60-cnt', wd60Labels, last60Days.map(d => wdCount60[d]), '#2563eb', null)}
+    <div class="stat-bars-subheader">Geschatte uren</div>
+    ${lineChart('wd60-uur', wd60Labels, last60Days.map(d => wdUren60[d]), '#0d9488', 'uur')}
   </div>`;
 
   // --- Openstaande werkdruk per maand (last 12 months) ---
@@ -1530,14 +1576,13 @@ function renderStatistieken() {
   });
   const maxWd12MCount = Math.max(...Object.values(wdCount12M), 0.1);
   const maxWd12MUren = Math.max(...Object.values(wdUren12M), 0.1);
+  const wd12MLabels = last12Maanden.map(formatMaand);
   const werkdruk12MHTML = `<div class="stats-sectie">
     <div class="stats-sectie-titel">Openstaande werkdruk — laatste 12 maanden</div>
-    <div class="stat-bars">
-      <div class="stat-bars-subheader">Aantal taken</div>
-      ${last12Maanden.map(m => statBar(formatMaand(m), wdCount12M[m], maxWd12MCount, null)).join('')}
-      <div class="stat-bars-subheader">Geschatte uren</div>
-      ${last12Maanden.map(m => statBar(formatMaand(m), wdUren12M[m], maxWd12MUren, null, 'uur')).join('')}
-    </div>
+    <div class="stat-bars-subheader" style="margin-top:0">Aantal taken</div>
+    ${lineChart('wd12m-cnt', wd12MLabels, last12Maanden.map(m => wdCount12M[m]), '#2563eb', null)}
+    <div class="stat-bars-subheader">Geschatte uren</div>
+    ${lineChart('wd12m-uur', wd12MLabels, last12Maanden.map(m => wdUren12M[m]), '#0d9488', 'uur')}
   </div>`;
 
   // --- Statistieken onderaan ---
