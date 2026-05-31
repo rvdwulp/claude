@@ -1219,6 +1219,12 @@ header h1 {
 }
 .stat-bars-subheader:first-child { margin-top: 0; }
 
+.stat-bars-compact .stat-bar-rij { margin-bottom: 1px; }
+.stat-bars-compact .stat-bar-outer { height: 8px; border-radius: 4px; }
+.stat-bars-compact .stat-bar-inner { border-radius: 4px; }
+.stat-bars-compact .stat-bar-label { font-size: 10px; min-width: 28px; }
+.stat-bars-compact .stat-bar-waarde { font-size: 10px; min-width: 28px; }
+
 .stat-highlight-card {
   background: linear-gradient(135deg, #1e40af 0%, #1d4ed8 100%);
   color: #fff;

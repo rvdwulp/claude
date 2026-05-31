@@ -1266,6 +1266,50 @@ function getLast6Months() {
   return result;
 }
 
+function getLast12Months() {
+  const result = [];
+  const now = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    result.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+  }
+  return result;
+}
+
+function getLast60Days() {
+  const result = [];
+  const today = new Date();
+  for (let i = 59; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    result.push(localDateStr(d));
+  }
+  return result;
+}
+
+function eindeMaand(maandStr) {
+  const [y, m] = maandStr.split('-').map(Number);
+  return localDateStr(new Date(y, m, 0));
+}
+
+function getTaakAanmaakDatum(t) {
+  if (t.aangemaakt) return t.aangemaakt.slice(0, 10);
+  try {
+    const ts = parseInt(t.id.slice(0, 8), 36);
+    if (ts > 1500000000000 && ts < 2100000000000) {
+      return new Date(ts).toISOString().slice(0, 10);
+    }
+  } catch(e) {}
+  return null;
+}
+
+function taakOpenOpDag(t, dagStr, aangemaakt) {
+  if (!aangemaakt || aangemaakt > dagStr) return false;
+  if (t.verwijderd && t.verwijderdDatum && t.verwijderdDatum <= dagStr) return false;
+  if (t.afgerond && !t.altijdBewaren && t.afgerondDatum && t.afgerondDatum <= dagStr) return false;
+  return true;
+}
+
 function formatMaand(str) {
   const [y, m] = str.split('-');
   const mnd = ['Jan','Feb','Mrt','Apr','Mei','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
@@ -1447,6 +1491,55 @@ function renderStatistieken() {
     </div>
   </div>`;
 
+  // --- Openstaande werkdruk per dag (last 60 days) ---
+  const last60Days = getLast60Days();
+  const wdCount60 = {}, wdUren60 = {};
+  last60Days.forEach(d => { wdCount60[d] = 0; wdUren60[d] = 0; });
+  taken.filter(t => !t.isStandaard).forEach(t => {
+    const aangemaakt = getTaakAanmaakDatum(t);
+    last60Days.forEach(d => {
+      if (taakOpenOpDag(t, d, aangemaakt)) { wdCount60[d]++; wdUren60[d] += urenVoorTaak(t); }
+    });
+  });
+  const maxWd60Count = Math.max(...Object.values(wdCount60), 0.1);
+  const maxWd60Uren = Math.max(...Object.values(wdUren60), 0.1);
+  const dagLabel60 = d => {
+    const dd = new Date(d + 'T00:00:00');
+    return dd.getDate() === 1 ? `${dd.getDate()}/${dd.getMonth()+1}` : String(dd.getDate());
+  };
+  const werkdruk60HTML = `<div class="stats-sectie">
+    <div class="stats-sectie-titel">Openstaande werkdruk — laatste 60 dagen</div>
+    <div class="stat-bars stat-bars-compact">
+      <div class="stat-bars-subheader">Aantal taken</div>
+      ${last60Days.map(d => statBar(dagLabel60(d), wdCount60[d], maxWd60Count, null)).join('')}
+      <div class="stat-bars-subheader">Geschatte uren</div>
+      ${last60Days.map(d => statBar(dagLabel60(d), wdUren60[d], maxWd60Uren, null, 'uur')).join('')}
+    </div>
+  </div>`;
+
+  // --- Openstaande werkdruk per maand (last 12 months) ---
+  const last12Maanden = getLast12Months();
+  const wdCount12M = {}, wdUren12M = {};
+  last12Maanden.forEach(m => { wdCount12M[m] = 0; wdUren12M[m] = 0; });
+  taken.filter(t => !t.isStandaard).forEach(t => {
+    const aangemaakt = getTaakAanmaakDatum(t);
+    last12Maanden.forEach(m => {
+      const refDag = eindeMaand(m);
+      if (taakOpenOpDag(t, refDag, aangemaakt)) { wdCount12M[m]++; wdUren12M[m] += urenVoorTaak(t); }
+    });
+  });
+  const maxWd12MCount = Math.max(...Object.values(wdCount12M), 0.1);
+  const maxWd12MUren = Math.max(...Object.values(wdUren12M), 0.1);
+  const werkdruk12MHTML = `<div class="stats-sectie">
+    <div class="stats-sectie-titel">Openstaande werkdruk — laatste 12 maanden</div>
+    <div class="stat-bars">
+      <div class="stat-bars-subheader">Aantal taken</div>
+      ${last12Maanden.map(m => statBar(formatMaand(m), wdCount12M[m], maxWd12MCount, null)).join('')}
+      <div class="stat-bars-subheader">Geschatte uren</div>
+      ${last12Maanden.map(m => statBar(formatMaand(m), wdUren12M[m], maxWd12MUren, null, 'uur')).join('')}
+    </div>
+  </div>`;
+
   // --- Statistieken onderaan ---
   const gedaanDagen = new Set();
   for (const [dag, planning] of Object.entries(dagPlanning)) {
@@ -1533,7 +1626,7 @@ function renderStatistieken() {
     </div>
   </div>`;
 
-  container.innerHTML = overzichtHTML + themaHTML + kwadrantHTML + prioHTML + weekdagHTML + weekHTML + maandHTML + statHTML;
+  container.innerHTML = overzichtHTML + themaHTML + kwadrantHTML + prioHTML + weekdagHTML + weekHTML + maandHTML + werkdruk60HTML + werkdruk12MHTML + statHTML;
 }
 
 // ===== HELPERS =====
