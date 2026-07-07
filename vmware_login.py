@@ -11,6 +11,11 @@ Gebruik:
 Wachtwoord instellen (kies één van beide, NIET in de code zetten):
     - omgevingsvariabele VMWARE_WACHTWOORD, of
     - het script vraagt er bij de start om (onzichtbaar, via getpass).
+
+Plaatjes (stap 3 klikt op screenshotjes i.p.v. vaste posities):
+    - installeer eenmalig: pip install opencv-python
+    - zet PNG's in de map 'plaatjes/' naast dit script, zie plaatjes/README.md
+    - ontbreekt een plaatje, dan wordt de vaste positie uit APPS gebruikt
 """
 
 import os
@@ -27,6 +32,12 @@ try:
     from screeninfo import get_monitors  # pip install screeninfo
 except ImportError:
     get_monitors = None
+
+try:
+    import cv2  # pip install opencv-python — nodig voor confidence bij plaatjes zoeken
+    HEEFT_OPENCV = True
+except ImportError:
+    HEEFT_OPENCV = False
 
 # ================== CONFIG — alles wat je aanpast staat hier ==================
 
@@ -54,6 +65,13 @@ COORD_LOGIN_KNOP     = (947, 608)
 COORD_ACCOUNT_KIEZEN = (953, 550)
 COORD_LAATSTE_LOCATIE = (958, 552)
 
+# Map met screenshotjes van de knoppen (PNG, geknipt met het Knipprogramma).
+# Moet naast dit script staan. Het script zoekt eerst het plaatje op het scherm;
+# lukt dat niet binnen de timeout, dan wordt de vaste positie hieronder gebruikt.
+PLAATJES_MAP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plaatjes")
+PLAATJE_TIMEOUT = 15      # sec zoeken naar een plaatje voordat we terugvallen
+PLAATJE_CONFIDENCE = 0.8  # 0.8 = 80% gelijkend is goed genoeg (vereist opencv-python)
+
 # Stap 3: het app-raster in de staging-omgeving.
 # Kolommen x: 397, 578, 759, 940, 1121, 1302, 1483
 # Rijen   y: 372 (rij 1), 585 (rij 2), 798 (rij 3)
@@ -62,13 +80,15 @@ COORD_LAATSTE_LOCATIE = (958, 552)
 # Rij 1: Adobe Reader | Afmelden Sessie | Diva | Diva BB | Email config | Kladblok | Excel
 # Rij 2: Knipprogramma | OneNote | Outlook | Word | Mijn Shuttel | MijnHR | Firefox
 # Rij 3: Oracle EBS | Oracle Fusion | PDF-XChange | PDF-XTools | Verkenner
+#
+# Per app: (naam, plaatje in PLAATJES_MAP of None, vaste positie als reserve)
 APPS = [
-    ("Outlook",      (759, 585)),
-    ("Diva",         (759, 372)),
-    ("OneNote",      (578, 585)),
-    ("Oracle Cloud", (578, 798)),
-    ("Verkenner",    (1121, 798)),
-    ("Firefox",      (1483, 585)),
+    ("Outlook",      "outlook.png",      (759, 585)),
+    ("Diva",         "diva.png",         (759, 372)),
+    ("OneNote",      "onenote.png",      (578, 585)),
+    ("Oracle Cloud", "oracle_cloud.png", (578, 798)),
+    ("Verkenner",    "verkenner.png",    (1121, 798)),
+    ("Firefox",      "firefox.png",      (1483, 585)),
 ]
 
 # Chrome-focus opties
@@ -118,6 +138,62 @@ def klik(x, y, label="", dubbel=False, move_duration=0.25):
         pyautogui.click()
     log(f"✅ {'Dubbelklik' if dubbel else 'Klik'}: {label} @ ({x},{y})")
     return True
+
+
+def zoek_plaatje(bestand, timeout=PLAATJE_TIMEOUT):
+    """Zoek een plaatje op het scherm, elke halve seconde opnieuw, max `timeout` sec.
+
+    Geeft het middelpunt terug, of None als het plaatje er (nog) niet is,
+    het bestand ontbreekt, of opencv niet geïnstalleerd is.
+    """
+    pad = os.path.join(PLAATJES_MAP, bestand)
+    if not os.path.exists(pad):
+        log(f"⚠️ Plaatje ontbreekt: {pad}")
+        return None
+    if not HEEFT_OPENCV:
+        return None  # zonder opencv geen confidence; exact matchen mislukt bijna altijd
+
+    eind = time.time() + timeout
+    while time.time() < eind:
+        try:
+            plek = pyautogui.locateCenterOnScreen(pad, confidence=PLAATJE_CONFIDENCE)
+        except pyautogui.ImageNotFoundException:
+            plek = None
+        except Exception as e:
+            log(f"⚠️ Fout bij zoeken naar {bestand}: {e}")
+            return None
+        if plek:
+            return plek
+        time.sleep(0.5)
+    return None
+
+
+def klik_plaatje(bestand, label="", fallback=None, timeout=PLAATJE_TIMEOUT, dubbel=False):
+    """Klik op een plaatje; val terug op een vaste positie als het niet gevonden wordt."""
+    if bestand:
+        plek = zoek_plaatje(bestand, timeout=timeout)
+        if plek:
+            return klik(int(plek.x), int(plek.y), label=f"{label} [plaatje]", dubbel=dubbel)
+        log(f"⚠️ '{bestand}' niet gevonden op het scherm.")
+    if fallback:
+        log(f"   → terugvallen op vaste positie voor {label}.")
+        return klik(*fallback, label=f"{label} [vaste positie]", dubbel=dubbel)
+    log(f"❌ {label}: geen plaatje gevonden en geen vaste positie bekend.")
+    return False
+
+
+def check_plaatjes():
+    """Meld bij de start welke plaatjes klaarstaan en welke ontbreken."""
+    if not HEEFT_OPENCV:
+        log("⚠️ opencv-python is niet geïnstalleerd (pip install opencv-python).")
+        log("   Plaatjes zoeken staat daardoor uit; alles gaat via vaste posities.")
+        return
+    ontbreekt = [p for _, p, _ in APPS if p and not os.path.exists(os.path.join(PLAATJES_MAP, p))]
+    if ontbreekt:
+        log(f"⚠️ Ontbrekende plaatjes in {PLAATJES_MAP}: {', '.join(ontbreekt)}")
+        log("   Voor die apps worden de vaste posities gebruikt.")
+    else:
+        log("✅ Alle app-plaatjes gevonden.")
 
 
 def typ(tekst, interval=0.05):
@@ -330,8 +406,8 @@ def step3_click_sequence():
     click_center_of_window(chrome, label="STAGING")
     wacht(PAUZE_STAGING)
 
-    for idx, (naam, (x, y)) in enumerate(APPS):
-        klik(x, y, label=naam)
+    for idx, (naam, plaatje, fallback) in enumerate(APPS):
+        klik_plaatje(plaatje, label=naam, fallback=fallback)
         wacht(PAUZE_STAP3)
 
         # Terug naar staging
@@ -369,6 +445,8 @@ def open_teams_in_new_tab():
 
 def main():
     stap = sys.argv[1] if len(sys.argv) > 1 else "alles"
+
+    check_plaatjes()
 
     if stap in ("alles", "1"):
         wachtwoord = get_wachtwoord()
