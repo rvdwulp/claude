@@ -712,6 +712,109 @@ function kopieerPrompt(event, tekst) {
   });
 }
 
+// ===== P+R SLINGE PARKEERDATA (RDW / Nationaal Parkeer Register) =====
+const NPR_INDEX_URL = 'https://npropendata.rdw.nl/parkingdata/v2/';
+const PR_POLL_MS = 60 * 1000; // brondata ververst ca. elke minuut
+let prPollTimer = null;
+
+async function vindSlingeDynamicUrl() {
+  // De UUID van P+R Slinge is stabiel: één keer opzoeken in de (grote) index,
+  // daarna uit localStorage hergebruiken.
+  const cached = Storage.get('prSlingeDynamicUrl');
+  if (cached) return cached;
+
+  const res = await fetch(NPR_INDEX_URL);
+  if (!res.ok) throw new Error('Index ophalen mislukt: HTTP ' + res.status);
+  const index = await res.json();
+
+  const kandidaten = (index.ParkingFacilities || []).filter(f => /slinge/i.test(f.name || ''));
+  const facility = kandidaten.find(f => f.dynamicDataUrl) || kandidaten[0];
+  if (!facility) throw new Error('P+R Slinge niet gevonden in RDW-index');
+  if (!facility.dynamicDataUrl) throw new Error(`"${facility.name}" heeft geen realtime data in het NPR`);
+
+  Storage.set('prSlingeDynamicUrl', facility.dynamicDataUrl);
+  Storage.set('prSlingeNaam', facility.name);
+  return facility.dynamicDataUrl;
+}
+
+async function haalSlingeStatus() {
+  const url = await vindSlingeDynamicUrl();
+  const res = await fetch(url);
+  if (!res.ok) {
+    // Cache kan verouderd zijn (bijv. UUID gewijzigd): één keer opnieuw opzoeken
+    if (res.status === 404 && Storage.get('prSlingeDynamicUrl')) {
+      localStorage.removeItem('prSlingeDynamicUrl');
+      return haalSlingeStatus();
+    }
+    throw new Error('Parkeerdata ophalen mislukt: HTTP ' + res.status);
+  }
+  const data = await res.json();
+  const status = data?.parkingFacilityDynamicInformation?.facilityActualStatus;
+  if (!status) throw new Error('Onverwacht antwoord van RDW-API');
+  return status;
+}
+
+function renderPrWidget(status) {
+  const el = document.getElementById('pr-status');
+  const tijdEl = document.getElementById('pr-tijd');
+  const widget = document.getElementById('pr-widget');
+  if (!el) return;
+
+  const vrij = status.vacantSpaces;
+  const capaciteit = status.parkingCapacity;
+
+  let tekst, klasse;
+  if (status.full === true || vrij === 0) {
+    tekst = 'Vol';
+    klasse = 'pr-vol';
+  } else if (typeof vrij === 'number') {
+    tekst = `${vrij} vrij` + (typeof capaciteit === 'number' ? ` van ${capaciteit}` : '');
+    const ratio = typeof capaciteit === 'number' && capaciteit > 0 ? vrij / capaciteit : 1;
+    klasse = ratio < 0.1 ? 'pr-vol' : ratio < 0.25 ? 'pr-krap' : 'pr-vrij';
+  } else {
+    tekst = 'Geen bezettingsdata';
+    klasse = 'pr-onbekend';
+  }
+  if (status.open === false) {
+    tekst += ' · gesloten';
+  }
+
+  el.textContent = tekst;
+  widget.className = 'pr-widget ' + klasse;
+
+  if (status.lastUpdated) {
+    // lastUpdated is epoch in seconden (soms ms)
+    const ms = status.lastUpdated > 1e12 ? status.lastUpdated : status.lastUpdated * 1000;
+    tijdEl.textContent = new Date(ms).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+    tijdEl.title = 'Laatste meting ' + new Date(ms).toLocaleString('nl-NL');
+  } else {
+    tijdEl.textContent = '';
+  }
+}
+
+async function ververseParkeerdata() {
+  const el = document.getElementById('pr-status');
+  if (!el) return;
+  try {
+    renderPrWidget(await haalSlingeStatus());
+  } catch (e) {
+    console.error('P+R Slinge data mislukt', e);
+    el.textContent = 'Data niet beschikbaar';
+    document.getElementById('pr-widget').className = 'pr-widget pr-onbekend';
+    document.getElementById('pr-widget').title =
+      'Ophalen mislukt: ' + e.message + '. Mogelijk blokkeert de browser het RDW-endpoint (CORS); een proxy via bijv. een Firebase Function lost dat op.';
+  }
+}
+
+function initParkeerWidget() {
+  ververseParkeerdata();
+  clearInterval(prPollTimer);
+  prPollTimer = setInterval(() => {
+    if (!document.hidden) ververseParkeerdata();
+  }, PR_POLL_MS);
+  document.getElementById('pr-refresh').addEventListener('click', ververseParkeerdata);
+}
+
 // ===== HELPERS =====
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2,7);
@@ -745,6 +848,7 @@ document.addEventListener('DOMContentLoaded', () => {
   carryForward();
   initFirebase();
   renderAlles();
+  initParkeerWidget();
 
   // Tab navigatie
   document.querySelectorAll('.tab-btn').forEach(btn => {

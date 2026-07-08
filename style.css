@@ -156,6 +156,37 @@ header h1 {
 
 .dag-stats span { background: var(--surface2); padding: 4px 10px; border-radius: 20px; }
 
+/* ===== P+R SLINGE WIDGET ===== */
+.pr-widget {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--text-muted);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+
+.pr-widget-main { display: flex; align-items: center; gap: 10px; }
+.pr-widget-icon { font-size: 20px; }
+.pr-widget-info { display: flex; flex-direction: column; }
+.pr-widget-titel { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.pr-widget-status { font-size: 14px; font-weight: 600; }
+.pr-widget-rechts { display: flex; align-items: center; gap: 8px; }
+.pr-widget-tijd { font-size: 11px; color: var(--text-muted); }
+
+.pr-widget.pr-vrij { border-left-color: var(--success); }
+.pr-widget.pr-vrij .pr-widget-status { color: var(--success); }
+.pr-widget.pr-krap { border-left-color: var(--warning); }
+.pr-widget.pr-krap .pr-widget-status { color: var(--warning); }
+.pr-widget.pr-vol { border-left-color: var(--danger); }
+.pr-widget.pr-vol .pr-widget-status { color: var(--danger); }
+.pr-widget.pr-onbekend { border-left-color: var(--text-muted); }
+.pr-widget.pr-onbekend .pr-widget-status { color: var(--text-muted); }
+
 .dag-section { margin-bottom: 20px; }
 
 .section-title {
