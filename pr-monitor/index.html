@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>P+R Rotterdam — actuele bezetting</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --page: #f9f9f7;
+      --surface: #fcfcfb;
+      --ink: #0b0b0b;
+      --ink-2: #52514e;
+      --ink-muted: #898781;
+      --border: rgba(11,11,11,0.10);
+      --track-neutral: #e1e0d9;
+
+      --status-good: #0ca30c;      --track-good: #d7efd7;
+      --status-warning: #fab219;   --track-warning: #fdeecb;
+      --status-serious: #ec835a;   --track-serious: #fbe2d7;
+      --status-critical: #d03b3b;  --track-critical: #f5d7d7;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page: #0d0d0d;
+        --surface: #1a1a19;
+        --ink: #ffffff;
+        --ink-2: #c3c2b7;
+        --ink-muted: #898781;
+        --border: rgba(255,255,255,0.10);
+        --track-neutral: #2c2c2a;
+        --track-good: #10360f;
+        --track-warning: #3d2f08;
+        --track-serious: #3f2114;
+        --track-critical: #3b1414;
+      }
+    }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--page);
+      color: var(--ink);
+      min-height: 100vh;
+      font-size: 14px;
+      padding: 24px 16px;
+    }
+
+    .container { max-width: 960px; margin: 0 auto; }
+
+    header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    h1 { font-size: 20px; font-weight: 650; }
+    .sub { color: var(--ink-2); font-size: 13px; margin-top: 4px; }
+
+    .header-acties { display: flex; align-items: center; gap: 10px; }
+    #laatste-refresh { color: var(--ink-muted); font-size: 12px; }
+    #refresh-btn {
+      font: inherit;
+      background: var(--surface);
+      color: var(--ink);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 14px;
+      cursor: pointer;
+    }
+    #refresh-btn:hover { border-color: var(--ink-muted); }
+    #refresh-btn:disabled { opacity: 0.5; cursor: default; }
+
+    .tegels {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .tegel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .tegel-label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+
+    .tegel-waarde { font-size: 40px; font-weight: 600; line-height: 1.1; }
+    .tegel-waarde .eenheid { font-size: 15px; font-weight: 500; color: var(--ink-2); margin-left: 6px; }
+
+    .meter {
+      height: 10px;
+      border-radius: 5px;
+      background: var(--track-neutral);
+      overflow: hidden;
+    }
+    .meter-vulling {
+      height: 100%;
+      width: 0%;
+      border-radius: 5px;
+      transition: width 0.4s ease;
+    }
+    .tegel[data-status="good"]     .meter { background: var(--track-good); }
+    .tegel[data-status="good"]     .meter-vulling { background: var(--status-good); }
+    .tegel[data-status="warning"]  .meter { background: var(--track-warning); }
+    .tegel[data-status="warning"]  .meter-vulling { background: var(--status-warning); }
+    .tegel[data-status="serious"]  .meter { background: var(--track-serious); }
+    .tegel[data-status="serious"]  .meter-vulling { background: var(--status-serious); }
+    .tegel[data-status="critical"] .meter { background: var(--track-critical); }
+    .tegel[data-status="critical"] .meter-vulling { background: var(--status-critical); }
+
+    .tegel-status { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+    .status-icoon { font-size: 12px; line-height: 1; }
+    .tegel[data-status="good"]     .status-icoon { color: var(--status-good); }
+    .tegel[data-status="warning"]  .status-icoon { color: var(--status-warning); }
+    .tegel[data-status="serious"]  .status-icoon { color: var(--status-serious); }
+    .tegel[data-status="critical"] .status-icoon { color: var(--status-critical); }
+    .tegel[data-status="onbekend"] .status-icoon,
+    .tegel[data-status="gesloten"] .status-icoon { color: var(--ink-muted); }
+
+    .tegel-detail { color: var(--ink-2); font-size: 12px; }
+    .tegel-tijd { color: var(--ink-muted); font-size: 11px; }
+
+    .fout-balk {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--status-critical);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      color: var(--ink-2);
+      font-size: 13px;
+    }
+    .fout-balk.zichtbaar { display: block; }
+
+    footer { margin-top: 24px; color: var(--ink-muted); font-size: 12px; }
+    footer a { color: inherit; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>P+R Rotterdam — actuele bezetting</h1>
+        <div class="sub">Slinge · Noorderhelling · Kralingse Zoom</div>
+      </div>
+      <div class="header-acties">
+        <span id="laatste-refresh"></span>
+        <button id="refresh-btn">Ververs</button>
+      </div>
+    </header>
+
+    <div class="fout-balk" id="fout-balk"></div>
+
+    <div class="tegels" id="tegels"></div>
+
+    <footer>
+      Bron: <a href="https://npropendata.rdw.nl/parkingdata/v2/" target="_blank" rel="noopener">RDW open parkeerdata (Nationaal Parkeer Register)</a>,
+      ververst automatisch elke minuut.
+    </footer>
+  </div>
+
+  <script>
+    const NPR_INDEX_URL = 'https://npropendata.rdw.nl/parkingdata/v2/';
+    const POLL_MS = 60 * 1000;
+    const CACHE_KEY = 'prMonitorUrls';
+
+    const LOCATIES = [
+      { key: 'slinge',         label: 'P+R Slinge',         patroon: /slinge/i },
+      { key: 'noorderhelling', label: 'P+R Noorderhelling', patroon: /noorderhelling/i },
+      { key: 'kralingsezoom',  label: 'P+R Kralingse Zoom', patroon: /kralingse\s*zoom/i },
+    ];
+
+    // status → icoon + tekst; kleur draagt de betekenis nooit alleen
+    const STATUS_TEKST = {
+      good:     { icoon: '●', tekst: 'Voldoende plek' },
+      warning:  { icoon: '●', tekst: 'Beperkt plek' },
+      serious:  { icoon: '●', tekst: 'Bijna vol' },
+      critical: { icoon: '●', tekst: 'Vol' },
+      gesloten: { icoon: '○', tekst: 'Gesloten' },
+      onbekend: { icoon: '○', tekst: 'Geen data' },
+    };
+
+    function bepaalStatus(s) {
+      if (s.open === false) return 'gesloten';
+      const vrij = s.vacantSpaces, cap = s.parkingCapacity;
+      if (s.full === true || vrij === 0) return 'critical';
+      if (typeof vrij !== 'number') return 'onbekend';
+      if (typeof cap !== 'number' || cap <= 0) return 'good';
+      const ratio = vrij / cap;
+      if (ratio < 0.1) return 'serious';
+      if (ratio < 0.25) return 'warning';
+      return 'good';
+    }
+
+    function maakTegels() {
+      document.getElementById('tegels').innerHTML = LOCATIES.map(l => `
+        <div class="tegel" id="tegel-${l.key}" data-status="onbekend">
+          <div class="tegel-label">${l.label}</div>
+          <div class="tegel-waarde" id="waarde-${l.key}">–</div>
+          <div class="meter"><div class="meter-vulling" id="meter-${l.key}"></div></div>
+          <div class="tegel-status">
+            <span class="status-icoon" id="icoon-${l.key}">○</span>
+            <span id="statustekst-${l.key}">Laden…</span>
+          </div>
+          <div class="tegel-detail" id="detail-${l.key}"></div>
+          <div class="tegel-tijd" id="tijd-${l.key}"></div>
+        </div>`).join('');
+    }
+
+    function renderTegel(key, status) {
+      const st = bepaalStatus(status);
+      const info = STATUS_TEKST[st];
+      const tegel = document.getElementById('tegel-' + key);
+      tegel.dataset.status = st;
+
+      const vrij = status.vacantSpaces, cap = status.parkingCapacity;
+      document.getElementById('waarde-' + key).innerHTML =
+        typeof vrij === 'number'
+          ? `${vrij}<span class="eenheid">vrij</span>`
+          : '–';
+
+      const bezet = (typeof vrij === 'number' && typeof cap === 'number' && cap > 0)
+        ? Math.min(100, Math.max(0, Math.round((1 - vrij / cap) * 100)))
+        : 0;
+      document.getElementById('meter-' + key).style.width = bezet + '%';
+
+      document.getElementById('icoon-' + key).textContent = info.icoon;
+      document.getElementById('statustekst-' + key).textContent = info.tekst;
+      document.getElementById('detail-' + key).textContent =
+        (typeof cap === 'number' && typeof vrij === 'number')
+          ? `${cap - vrij} van ${cap} plekken bezet (${bezet}%)`
+          : 'Capaciteit onbekend';
+
+      if (status.lastUpdated) {
+        const ms = status.lastUpdated > 1e12 ? status.lastUpdated : status.lastUpdated * 1000;
+        document.getElementById('tijd-' + key).textContent =
+          'Meting van ' + new Date(ms).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+      }
+    }
+
+    function renderTegelFout(key, melding) {
+      const tegel = document.getElementById('tegel-' + key);
+      tegel.dataset.status = 'onbekend';
+      document.getElementById('waarde-' + key).textContent = '–';
+      document.getElementById('meter-' + key).style.width = '0%';
+      document.getElementById('icoon-' + key).textContent = '○';
+      document.getElementById('statustekst-' + key).textContent = 'Geen data';
+      document.getElementById('detail-' + key).textContent = melding;
+    }
+
+    // De UUID's zijn stabiel: één keer opzoeken in de (grote) index, daarna uit cache.
+    async function vindUrls() {
+      try {
+        const cached = JSON.parse(localStorage.getItem(CACHE_KEY));
+        if (cached && LOCATIES.every(l => l.key in cached)) return cached;
+      } catch {}
+
+      const res = await fetch(NPR_INDEX_URL);
+      if (!res.ok) throw new Error('RDW-index ophalen mislukt: HTTP ' + res.status);
+      const index = await res.json();
+      const facilities = index.ParkingFacilities || [];
+
+      const urls = {};
+      for (const loc of LOCATIES) {
+        const kandidaten = facilities.filter(f => loc.patroon.test(f.name || ''));
+        const facility = kandidaten.find(f => f.dynamicDataUrl) || kandidaten[0] || null;
+        urls[loc.key] = facility
+          ? { url: facility.dynamicDataUrl || null, naam: facility.name }
+          : null;
+      }
+      localStorage.setItem(CACHE_KEY, JSON.stringify(urls));
+      return urls;
+    }
+
+    async function haalStatus(url) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const status = data?.parkingFacilityDynamicInformation?.facilityActualStatus;
+      if (!status) throw new Error('Onverwacht antwoord van RDW-API');
+      return status;
+    }
+
+    async function ververs() {
+      const btn = document.getElementById('refresh-btn');
+      const foutBalk = document.getElementById('fout-balk');
+      btn.disabled = true;
+
+      let urls;
+      try {
+        urls = await vindUrls();
+        foutBalk.classList.remove('zichtbaar');
+      } catch (e) {
+        console.error(e);
+        foutBalk.textContent = 'Kon de RDW-parkeerindex niet ophalen (' + e.message +
+          '). Mogelijk blokkeert de browser het RDW-endpoint (CORS); probeer het later opnieuw.';
+        foutBalk.classList.add('zichtbaar');
+        LOCATIES.forEach(l => renderTegelFout(l.key, 'Bron onbereikbaar'));
+        btn.disabled = false;
+        return;
+      }
+
+      await Promise.all(LOCATIES.map(async loc => {
+        const entry = urls[loc.key];
+        if (!entry) return renderTegelFout(loc.key, 'Niet gevonden in RDW-index');
+        if (!entry.url) return renderTegelFout(loc.key, `"${entry.naam}" levert geen realtime data`);
+        try {
+          renderTegel(loc.key, await haalStatus(entry.url));
+        } catch (e) {
+          console.error(loc.label, e);
+          // Cache kan verouderd zijn (bijv. UUID gewijzigd): volgende keer opnieuw opzoeken
+          if (String(e.message).includes('404')) localStorage.removeItem(CACHE_KEY);
+          renderTegelFout(loc.key, 'Ophalen mislukt: ' + e.message);
+        }
+      }));
+
+      document.getElementById('laatste-refresh').textContent =
+        'Bijgewerkt ' + new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      btn.disabled = false;
+    }
+
+    maakTegels();
+    ververs();
+    setInterval(() => { if (!document.hidden) ververs(); }, POLL_MS);
+    document.getElementById('refresh-btn').addEventListener('click', ververs);
+  </script>
+</body>
+</html>
