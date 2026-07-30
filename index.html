@@ -137,13 +137,15 @@
             <option value="aangemaakt">Aangemaakt</option>
           </select>
         </div>
-        <div class="master-toolbar-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button id="nieuwe-taak-btn" class="primary-btn">+ Nieuwe taak</button>
-          <button id="standaarden-master-btn" class="secondary-btn" title="Standaard dagacties beheren">&#9776; Standaarden</button>
-          <button id="export-btn" class="secondary-btn" title="Exporteer alle taken als JSON">&#128229; Exporteer</button>
-          <button id="import-btn" class="secondary-btn" title="Importeer taken uit JSON">&#128228; Importeer</button>
-          <input type="file" id="import-file-input" accept=".json" style="display:none">
-        </div>
+      </div>
+
+      <!-- Buiten .master-toolbar zodat position:sticky de hele tab als ruimte heeft -->
+      <div class="master-toolbar-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button id="nieuwe-taak-btn" class="primary-btn">+ Nieuwe taak</button>
+        <button id="standaarden-master-btn" class="secondary-btn" title="Standaard dagacties beheren">&#9776; Standaarden</button>
+        <button id="export-btn" class="secondary-btn" title="Exporteer alle taken als JSON">&#128229; Exporteer</button>
+        <button id="import-btn" class="secondary-btn" title="Importeer taken uit JSON">&#128228; Importeer</button>
+        <input type="file" id="import-file-input" accept=".json" style="display:none">
       </div>
 
       <div id="master-lijst" class="master-list"></div>
