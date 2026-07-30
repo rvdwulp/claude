@@ -2,33 +2,38 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --primary: #2563eb;
-  --primary-dark: #1d4ed8;
-  --success: #16a34a;
-  --danger: #dc2626;
+  --primary: #00811F;
+  --primary-dark: #1D7F34;
+  --accent: #E3614D;
+  --success: #00811F;
+  --danger: #E3614D;
   --warning: #d97706;
-  --bg: #f8fafc;
+  --bg: #EFF4F6;
   --surface: #ffffff;
-  --surface2: #f1f5f9;
-  --border: #e2e8f0;
-  --text: #0f172a;
-  --text-muted: #64748b;
-  --zakelijk: #2563eb;
-  --prive: #9333ea;
-  --periode-A: #dc2626;
+  --surface2: #e6edf0;
+  --border: #d8e0e3;
+  --text: #000000;
+  --text-muted: #5a6b73;
+  --zakelijk: #00811F;
+  --prive: #6d28d9;
+  --periode-A: #E3614D;
   --periode-B: #d97706;
-  --periode-C: #16a34a;
+  --periode-C: #00811F;
   --radius: 8px;
   --shadow: 0 1px 3px rgba(0,0,0,0.1);
   --shadow-lg: 0 10px 25px rgba(0,0,0,0.15);
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Bolder Light', 'Bolder Heading', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
   font-size: 14px;
+}
+
+h1, h2, h3, .thema-header, .modal-header h2 {
+  font-family: 'Bolder Heading', 'Bolder Light', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
 }
 
 /* ===== HEADER ===== */
@@ -258,8 +263,8 @@ header h1 {
 .badge-thema-EU          { background: #e0e7ff; color: #3730a3; }
 .badge-thema-Presentatie { background: #fce7f3; color: #be185d; }
 .badge-thema-Overig      { background: #f1f5f9; color: #475569; }
-.badge-zakelijk { background: #dbeafe; color: var(--zakelijk); }
-.badge-prive { background: #f3e8ff; color: var(--prive); }
+.badge-zakelijk { background: #d6ecdc; color: var(--zakelijk); }
+.badge-prive { background: #ede9fe; color: var(--prive); }
 .badge-A { background: #fee2e2; color: var(--periode-A); }
 .badge-B { background: #fef3c7; color: var(--periode-B); }
 .badge-C { background: #dcfce7; color: var(--periode-C); }
@@ -267,6 +272,20 @@ header h1 {
 .badge-prio { background: #f1f5f9; color: var(--text); }
 .badge-tijd { background: #fef3c7; color: #92400e; }
 .badge-urgent { background: #fee2e2; color: #991b1b; }
+.badge-notitie {
+  background: #fef3c7;
+  color: #92400e;
+  font-weight: 600;
+  padding: 2px 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.badge-notitie::before {
+  content: '📝';
+  font-size: 11px;
+  line-height: 1;
+}
 
 .task-time {
   font-size: 13px;
@@ -734,25 +753,26 @@ header h1 {
 }
 
 /* ===== STANDAARD DAGACTIES ===== */
-.standaarden-sectie { margin-bottom: 20px; }
+.standaarden-sectie { margin-bottom: 14px; }
 .standaarden-sectie:last-child { margin-bottom: 0; }
 
 .standaarden-sectie-titel {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
-  padding-bottom: 8px;
+  padding-bottom: 4px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .standaard-rij {
   display: flex;
-  gap: 6px;
+  gap: 5px;
   align-items: center;
-  padding: 5px 0;
+  padding: 3px 6px;
+  border-radius: 4px;
   border-bottom: 1px solid var(--surface2);
 }
 .standaard-rij:last-child { border-bottom: none; }
@@ -762,20 +782,25 @@ header h1 {
   display: flex;
   gap: 6px;
   align-items: center;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 2px dashed var(--border);
+  margin-top: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--surface2);
   flex-wrap: wrap;
 }
 
 .standaard-dag-rij {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 4px;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: 4px;
   border-bottom: 1px solid var(--surface2);
 }
 .standaard-dag-rij:last-child { border-bottom: none; }
+
+.standaard-zakelijk { background: #ecf6ef; }
+.standaard-prive { background: #f5f0fe; }
 
 .standaard-dag-label {
   display: flex !important;
@@ -785,14 +810,22 @@ header h1 {
   flex: 1;
   text-transform: none !important;
   letter-spacing: 0 !important;
-  font-size: 13px !important;
+  font-size: 12px !important;
   font-weight: 500 !important;
   color: var(--text) !important;
   cursor: pointer;
 }
 .standaard-dag-label input[type="checkbox"] { width: auto !important; margin: 0; cursor: pointer; flex-shrink: 0; }
 
-.standaard-dag-override { width: 100px; flex-shrink: 0; }
+.standaard-dag-override { width: 90px; flex-shrink: 0; }
+
+.standaard-rij input[type="text"],
+.standaard-rij input[type="time"],
+.standaard-rij select,
+.standaard-dag-override {
+  font-size: 12px;
+  padding: 3px 6px;
+}
 
 .standaarden-leeg { padding: 12px 0; font-size: 13px; color: var(--text-muted); }
 
@@ -1445,6 +1478,31 @@ header h1 {
   .tab-btn { padding: 5px 8px; }
   .dag-title span:first-child { font-size: 14px; }
   #snel-werk-btn, #snel-prive-btn { font-size: 12px; padding: 8px 4px; }
+}
+
+/* Desktop: sticky actieknoppen (≥ 769px) —————————————————————————— */
+@media (min-width: 769px) {
+  /* Dag-tab: actieknoppen onderaan vastgezet */
+  .dag-actions {
+    position: sticky;
+    bottom: 0;
+    background: var(--bg);
+    padding: 12px 0 14px;
+    margin-top: 16px;
+    border-top: 1px solid var(--border);
+    z-index: 10;
+  }
+
+  /* Master-tab: actieknoppen (+ Nieuw, Standaarden, Export, Import) bovenaan vastgezet */
+  .master-toolbar-actions {
+    position: sticky;
+    top: 52px; /* onder de vaste header */
+    background: var(--bg);
+    padding: 8px 0 10px;
+    z-index: 10;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2px;
+  }
 }
 
 /* Heel kleine schermen: 320px ———————————————————————————————————— */

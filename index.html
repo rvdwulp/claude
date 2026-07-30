@@ -33,8 +33,8 @@
           <span id="dag-datum"></span>
           <span id="dag-label"></span>
         </div>
-        <button id="next-dag" class="nav-btn">›</button>
         <button id="naar-vandaag" class="today-btn" style="display:none">Vandaag</button>
+        <button id="next-dag" class="nav-btn">›</button>
       </div>
 
       <div class="dag-stats">
@@ -137,8 +137,9 @@
             <option value="aangemaakt">Aangemaakt</option>
           </select>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="master-toolbar-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button id="nieuwe-taak-btn" class="primary-btn">+ Nieuwe taak</button>
+          <button id="standaarden-master-btn" class="secondary-btn" title="Standaard dagacties beheren">&#9776; Standaarden</button>
           <button id="export-btn" class="secondary-btn" title="Exporteer alle taken als JSON">&#128229; Exporteer</button>
           <button id="import-btn" class="secondary-btn" title="Importeer taken uit JSON">&#128228; Importeer</button>
           <input type="file" id="import-file-input" accept=".json" style="display:none">
@@ -382,6 +383,7 @@
       </div>
       <div class="modal-footer">
         <button class="secondary-btn" id="snel-modal-annuleren">Annuleren</button>
+        <button class="secondary-btn" id="snel-modal-nogeen">+ Nog &eacute;&eacute;n</button>
         <button class="primary-btn" id="snel-modal-opslaan">Toevoegen aan dag</button>
       </div>
     </div>
@@ -395,9 +397,13 @@
         <button class="close-btn" id="standaarden-sluiten">&#x2715;</button>
       </div>
       <div class="modal-body">
+        <div class="standaarden-sectie" id="standaarden-dag-sectie">
+          <div class="standaarden-sectie-titel">Toevoegen aan <span id="standaarden-dag-label"></span></div>
+          <div id="standaarden-dag-lijst"></div>
+          <button class="primary-btn" id="standaarden-toevoegen-inline" style="margin-top:8px;width:100%">Voeg geselecteerde toe aan dag</button>
+        </div>
         <div class="standaarden-sectie">
-          <div class="standaarden-sectie-titel">Beheer standaarden</div>
-          <div id="standaarden-beheer-lijst"></div>
+          <div class="standaarden-sectie-titel">Nieuwe standaard</div>
           <div class="standaard-nieuw-rij">
             <input type="text" id="nieuw-standaard-naam" class="filter-select" placeholder="Naam activiteit" style="flex:1;min-width:0">
             <input type="time" id="nieuw-standaard-tijd" class="filter-select" style="width:110px">
@@ -408,14 +414,34 @@
             <button id="nieuw-standaard-btn" class="primary-btn" style="white-space:nowrap">+ Voeg toe</button>
           </div>
         </div>
-        <div class="standaarden-sectie" id="standaarden-dag-sectie">
-          <div class="standaarden-sectie-titel">Toevoegen aan <span id="standaarden-dag-label"></span></div>
-          <div id="standaarden-dag-lijst"></div>
+        <div class="standaarden-sectie">
+          <div class="standaarden-sectie-titel">Beheer bestaande standaarden</div>
+          <div id="standaarden-beheer-lijst"></div>
         </div>
       </div>
       <div class="modal-footer">
         <button class="secondary-btn" id="standaarden-annuleren">Annuleren</button>
         <button class="primary-btn" id="standaarden-toevoegen-btn">Voeg geselecteerde toe aan dag</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Verplaats naar datum -->
+  <div id="verplaats-modal-overlay" class="modal-overlay hidden">
+    <div class="modal" style="max-width:340px">
+      <div class="modal-header">
+        <h2>Verplaats naar datum</h2>
+        <button class="close-btn" id="verplaats-modal-sluiten">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <label>Kies datum</label>
+          <input type="date" id="verplaats-datum-input" class="filter-select" style="width:100%">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="secondary-btn" id="verplaats-modal-annuleren">Annuleren</button>
+        <button class="primary-btn" id="verplaats-modal-opslaan">Verplaatsen</button>
       </div>
     </div>
   </div>

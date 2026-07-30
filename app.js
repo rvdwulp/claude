@@ -13,6 +13,7 @@ let taken = [];        // alle master taken
 let dagPlanning = {};  // { 'YYYY-MM-DD': { taakId: { gedaan, overgenomen, tijdstip } } }
 let huidigeDag = vandaagStr();
 let bewerkTaakId = null;
+let bewerkSnapshot = null;
 let geselecteerdVoorDag = new Set();
 let dragSrcId = null;
 let dragSrcSectie = null;
@@ -49,15 +50,19 @@ function laadData() {
   console.log('[LOAD] taken:', taken.length, '| vandaag in dagPlanning:', dagKeys.length, dagKeys);
 }
 
-function slaData() {
+function slaData(syncNaarServer = true) {
   const dagKeys = dagPlanning[vandaagStr()] ? Object.keys(dagPlanning[vandaagStr()]).filter(k => !k.startsWith('__')) : [];
   console.log('[SAVE] taken:', taken.length, '| vandaag in dagPlanning:', dagKeys.length, dagKeys);
   Storage.set('actielijst_taken', taken);
   Storage.set('actielijst_dagPlanning', dagPlanning);
+  Storage.set('actielijst_standaarden', standaarden);
+  Storage.set('actielijst_laatstGewijzigd', Date.now());
   const rawDag = localStorage.getItem('actielijst_dagPlanning');
   console.log('[SAVE-RAW] na schrijven:', rawDag ? rawDag.substring(0, 120) : 'NULL — schrijven mislukt!');
-  clearTimeout(syncTimeout);
-  syncTimeout = setTimeout(syncServer, 800);
+  if (syncNaarServer) {
+    clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(syncServer, 800);
+  }
 }
 
 // ===== SERVER SYNC =====
@@ -71,7 +76,7 @@ async function syncServer() {
     const res = await fetch('save.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'd=' + encodeURIComponent(JSON.stringify({ taken, dagPlanning, standaarden }))
+      body: 'd=' + encodeURIComponent(JSON.stringify({ taken, dagPlanning, standaarden, laatstGewijzigd: Storage.get('actielijst_laatstGewijzigd', 0) }))
     });
     const data = await res.json();
     if (data.status === 'ok') {
@@ -107,7 +112,8 @@ async function laadVanServer() {
         standaarden = data.standaarden;
         Storage.set('actielijst_standaarden', standaarden);
       }
-      renderAlles();
+      if (data.laatstGewijzigd) Storage.set('actielijst_laatstGewijzigd', data.laatstGewijzigd);
+      console.log('[SERVER] server-data geladen');
     }
   } catch(e) {
     console.error('[SERVER] laden mislukt:', e.message);
@@ -143,24 +149,29 @@ function carryForward() {
   const vandaag = vandaagStr();
   if (isWeekend(vandaag)) return; // geen carry op weekenddagen
 
-  const vorigeDag = vorigeWerkdag(vandaag);
-  const vorigePlanning = dagPlanning[vorigeDag];
-  if (!vorigePlanning) return;
-
   if (!dagPlanning[vandaag]) dagPlanning[vandaag] = {};
 
+  // Doorloop ALLE verleden dagen (ook als er meerdere werkdagen zijn overgeslagen)
+  const verledenDagen = Object.keys(dagPlanning).filter(d => d < vandaag).sort();
+
   let overgenomen = 0;
-  for (const [taakId, info] of Object.entries(vorigePlanning)) {
-    if (taakId.startsWith('__')) continue; // interne sleutels (volgorde, etc.) overslaan
-    if (!info.gedaan && !dagPlanning[vandaag][taakId]) {
+  for (const dag of verledenDagen) {
+    const planning = dagPlanning[dag];
+    if (!planning) continue;
+    for (const [taakId, info] of Object.entries(planning)) {
+      if (taakId.startsWith('__')) continue;
+      if (info.gedaan) continue; // afgevinkt → laat in verleden (archief)
       const taak = taken.find(t => t.id === taakId);
       if (taak?.isStandaard) continue;
-      dagPlanning[vandaag][taakId] = { gedaan: false, overgenomen: true };
-      overgenomen++;
+      if (!dagPlanning[vandaag][taakId]) {
+        dagPlanning[vandaag][taakId] = { gedaan: false, overgenomen: true };
+        overgenomen++;
+      }
+      delete planning[taakId];
     }
   }
 
-  if (overgenomen > 0) slaData();
+  if (overgenomen > 0) slaData(false);
 }
 
 function formatDatum(str) {
@@ -261,16 +272,18 @@ function renderDagLijst(containerId, taken, sectieNaam) {
       <div class="task-body">
         <div class="task-omschrijving">${escHtml(t.omschrijving)}</div>
         <div class="task-meta">
-          <span class="badge badge-thema-${t.thema}">${t.thema}</span>
+          ${t.snelToegevoegd ? '' : `<span class="badge badge-thema-${t.thema}">${t.thema}</span>`}
           <span class="badge badge-${t.type}">${t.type === 'zakelijk' ? 'Zakelijk' : 'Privé'}</span>
-          ${t.periode ? `<span class="badge badge-${t.periode}">${t.periode}</span>` : ''}
-          ${t.grootte ? `<span class="badge badge-grootte">${t.grootte}</span>` : ''}
-          ${t.prio ? `<span class="badge badge-prio">P${t.prio}</span>` : ''}
-          ${isUrgent(t) ? '<span class="badge badge-urgent">Urgent</span>' : ''}
+          ${!t.snelToegevoegd && t.periode ? `<span class="badge badge-${t.periode}">${t.periode}</span>` : ''}
+          ${!t.snelToegevoegd && t.grootte ? `<span class="badge badge-grootte">${t.grootte}</span>` : ''}
+          ${!t.snelToegevoegd && t.prio ? `<span class="badge badge-prio">P${t.prio}</span>` : ''}
+          ${!t.snelToegevoegd && isUrgent(t) ? '<span class="badge badge-urgent">Urgent</span>' : ''}
           ${overgenomen ? '<span class="badge" style="background:#fef3c7;color:#92400e">Overgenomen</span>' : ''}
         </div>
       </div>
       <div class="task-actions">
+        ${!gedaan && huidigeDag !== vandaagStr() ? `<button class="task-action-btn" onclick="verplaatsNaarVandaag('${t.id}', '${huidigeDag}', event)" data-tooltip="Naar vandaag">&#10142;</button>` : ''}
+        ${!gedaan ? `<button class="task-action-btn" onclick="openVerplaatsDatumModal('${t.id}', '${huidigeDag}', event)" data-tooltip="Verplaats naar datum">&#128197;</button>` : ''}
         <button class="task-action-btn" onclick="openTijdstipModal('${t.id}', event)" data-tooltip="Tijdstip instellen">&#128336;</button>
         <button class="task-action-btn" onclick="verwijderUitDag('${t.id}', event)" data-tooltip="Verwijder uit dag">&#x2715;</button>
       </div>
@@ -329,7 +342,23 @@ function toggleGedaan(taakId, event) {
   event.stopPropagation();
   if (!dagPlanning[huidigeDag]) dagPlanning[huidigeDag] = {};
   const info = dagPlanning[huidigeDag][taakId] || {};
-  dagPlanning[huidigeDag][taakId] = { ...info, gedaan: !info.gedaan };
+  const wordtGedaan = !info.gedaan;
+  dagPlanning[huidigeDag][taakId] = { ...info, gedaan: wordtGedaan };
+
+  // Niet-terugkerende taak afgevinkt → uit Master halen (blijft in Archief via dagPlanning)
+  const taak = taken.find(t => t.id === taakId);
+  if (taak && !taak.altijdBewaren) {
+    if (wordtGedaan) {
+      taak.uitMaster = true;
+      taak.afgerond = true;
+      taak.afgerondDatum = taak.afgerondDatum || huidigeDag;
+    } else {
+      taak.uitMaster = false;
+      taak.afgerond = false;
+      taak.afgerondDatum = null;
+    }
+  }
+
   slaData();
   renderDag();
 }
@@ -340,6 +369,72 @@ function verwijderUitDag(taakId, event) {
     delete dagPlanning[huidigeDag][taakId];
     slaData();
     renderDag();
+  }
+}
+
+// ===== TAAK VERPLAATSEN TUSSEN DAGEN =====
+let verplaatsTaakId = null;
+let verplaatsFromDate = null;
+
+function verplaatsTaakDag(taakId, fromDate, toDate) {
+  if (!fromDate || !toDate || fromDate === toDate) return;
+  if (!dagPlanning[fromDate] || !dagPlanning[fromDate][taakId]) return;
+  if (!dagPlanning[toDate]) dagPlanning[toDate] = {};
+  dagPlanning[toDate][taakId] = dagPlanning[fromDate][taakId];
+  delete dagPlanning[fromDate][taakId];
+  slaData();
+  renderDag();
+  if (document.getElementById('tab-archief').classList.contains('active')) renderArchief();
+}
+
+function verplaatsNaarVandaag(taakId, fromDate, event) {
+  event.stopPropagation();
+  verplaatsTaakDag(taakId, fromDate, vandaagStr());
+}
+
+function openVerplaatsDatumModal(taakId, fromDate, event) {
+  event.stopPropagation();
+  verplaatsTaakId = taakId;
+  verplaatsFromDate = fromDate;
+  document.getElementById('verplaats-datum-input').value = vandaagStr();
+  document.getElementById('verplaats-modal-overlay').classList.remove('hidden');
+}
+
+function slaVerplaatsOp() {
+  const datum = document.getElementById('verplaats-datum-input').value;
+  if (datum && verplaatsTaakId && verplaatsFromDate) {
+    verplaatsTaakDag(verplaatsTaakId, verplaatsFromDate, datum);
+  }
+  sluitVerplaatsModal();
+}
+
+function sluitVerplaatsModal() {
+  verplaatsTaakId = null;
+  verplaatsFromDate = null;
+  document.getElementById('verplaats-modal-overlay').classList.add('hidden');
+}
+
+// ===== ARCHIEF: AFVINKEN / VERWIJDEREN =====
+function vinkArchiefAf(taakId, dag, event) {
+  event.stopPropagation();
+  if (!dagPlanning[dag] || !dagPlanning[dag][taakId]) return;
+  dagPlanning[dag][taakId] = { ...dagPlanning[dag][taakId], gedaan: true };
+  const taak = taken.find(t => t.id === taakId);
+  if (taak && !taak.altijdBewaren) {
+    taak.uitMaster = true;
+    taak.afgerond = true;
+    taak.afgerondDatum = taak.afgerondDatum || dag;
+  }
+  slaData();
+  renderArchief();
+}
+
+function verwijderArchiefTaak(taakId, dag, event) {
+  event.stopPropagation();
+  if (dagPlanning[dag]) {
+    delete dagPlanning[dag][taakId];
+    slaData();
+    renderArchief();
   }
 }
 
@@ -461,6 +556,7 @@ function renderMaster() {
   let gefilterd = taken.filter(t => {
     if (t.verwijderd) return false;
     if (t.isStandaard) return false;
+    if (t.uitMaster) return false;
     if (thema && t.thema !== thema) return false;
     if (periode && t.periode !== periode) return false;
     if (grootte && t.grootte !== grootte) return false;
@@ -509,7 +605,7 @@ function renderMaster() {
     const themaHTML = themas.map(t => {
       const lijst = perThema[t];
       if (!lijst.length) return '';
-      const gesorteerd = lijst.sort((a,b) => a.prio - b.prio);
+      const gesorteerd = lijst.sort((a,b) => (a.periode||'Z').localeCompare(b.periode||'Z') || a.prio - b.prio);
       return `<div class="thema-groep">
         <div class="thema-header thema-header-${t}">${t} <span class="thema-count">${lijst.length} taken</span></div>
         ${gesorteerd.map(taak => renderMasterKaart(taak)).join('')}
@@ -518,7 +614,7 @@ function renderMaster() {
 
     const priveHTML = priveTaken.length ? `<div class="thema-groep">
       <div class="thema-header thema-header-prive">Privé <span class="thema-count">${priveTaken.length} taken</span></div>
-      ${priveTaken.sort((a,b) => (a.prio||5) - (b.prio||5)).map(taak => renderMasterKaart(taak)).join('')}
+      ${priveTaken.sort((a,b) => (a.periode||'Z').localeCompare(b.periode||'Z') || (a.prio||5) - (b.prio||5)).map(taak => renderMasterKaart(taak)).join('')}
     </div>` : '';
 
     container.innerHTML = kwadrantBanner + themaHTML + priveHTML;
@@ -554,7 +650,7 @@ function renderMasterKaart(t) {
         ${!belangrijk ? '<span class="badge badge-grootte">Niet belangrijk</span>' : ''}
         ${afgerond ? `<span class="badge badge-afgerond">Afgerond${t.afgerondDatum ? ' ' + t.afgerondDatum.slice(5,10).replace('-','/') : ''}</span>` : ''}
         ${wachten ? '<span class="badge badge-wachten">⏸ Wachten</span>' : ''}
-        ${t.notities ? `<span class="badge badge-grootte" title="${escHtml(t.notities)}">📝</span>` : ''}
+        ${t.notities ? `<span class="badge badge-notitie" title="${escHtml(t.notities)}">Notitie</span>` : ''}
         ${t.altijdBewaren ? '<span class="badge badge-terugkerend" title="Terugkerende taak">↻</span>' : ''}
       </div>
     </div>
@@ -683,9 +779,10 @@ function renderArchief() {
       ${dagTaken.map(t => {
         const isVerwijderd = !!t.verwijderd;
         const isGedaan = t.dagInfo.gedaan && !isVerwijderd;
+        const isOpen = !isGedaan && !isVerwijderd;
         return `
         <div class="task-card ${isGedaan ? 'gedaan' : ''} ${isVerwijderd ? 'archief-verwijderd' : ''}" style="cursor:default">
-          <div class="task-check">${isGedaan ? '✓' : isVerwijderd ? '🗑' : ''}</div>
+          ${isGedaan || isVerwijderd ? `<div class="task-check">${isGedaan ? '✓' : '🗑'}</div>` : ''}
           <div class="task-body">
             <div class="task-omschrijving">${escHtml(t.omschrijving)}</div>
             <div class="task-meta">
@@ -696,6 +793,12 @@ function renderArchief() {
               ${t.dagInfo.overgenomen && !isVerwijderd ? '<span class="badge" style="background:#fef3c7;color:#92400e">Overgenomen</span>' : ''}
             </div>
           </div>
+          ${isOpen ? `<div class="task-actions" style="opacity:1">
+            ${dag !== vandaagStr() ? `<button class="task-action-btn" onclick="verplaatsNaarVandaag('${t.id}', '${dag}', event)" data-tooltip="Naar vandaag">&#10142;</button>` : ''}
+            <button class="task-action-btn" onclick="openVerplaatsDatumModal('${t.id}', '${dag}', event)" data-tooltip="Verplaats naar datum">&#128197;</button>
+            <button class="task-action-btn btn-gedaan" onclick="vinkArchiefAf('${t.id}', '${dag}', event)" data-tooltip="Markeer als gedaan">&#x2713;</button>
+            <button class="task-action-btn btn-delete" onclick="verwijderArchiefTaak('${t.id}', '${dag}', event)" data-tooltip="Verwijder uit dag">&#x2715;</button>
+          </div>` : ''}
           ${isVerwijderd ? `<div class="task-actions" style="opacity:1">
             <button class="task-action-btn btn-delete" onclick="definitiefVerwijder('${t.id}', event)" data-tooltip="Definitief verwijderen">&#x1F5D1;</button>
           </div>` : ''}
@@ -784,6 +887,21 @@ function bewerkTaak(taakId) {
   togglePriveVelden();
   document.getElementById('modal-overlay').classList.remove('hidden');
   document.getElementById('taak-omschrijving').focus();
+  bewerkSnapshot = getModalSnapshot();
+}
+
+function getModalSnapshot() {
+  return JSON.stringify({
+    o: document.getElementById('taak-omschrijving').value.trim(),
+    th: document.getElementById('taak-thema').value,
+    ty: document.getElementById('taak-type').value,
+    p: document.getElementById('taak-periode').value,
+    g: document.getElementById('taak-grootte').value,
+    pr: document.getElementById('taak-prio').value,
+    t: document.getElementById('taak-tijd').value || '',
+    n: document.getElementById('taak-notities').value.trim(),
+    ab: !!document.getElementById('taak-altijd-bewaren').checked
+  });
 }
 
 function slaModalOp() {
@@ -833,6 +951,7 @@ function sluitModal() {
   document.getElementById('modal-overlay').classList.add('hidden');
   bewerkTaakId = null;
   voegToeAanDagNaSave = false;
+  bewerkSnapshot = null;
 }
 
 // ===== SELECTEER TAKEN VOOR DAG =====
@@ -907,7 +1026,7 @@ function openSnelModal(type) {
   document.getElementById('snel-onderwerp').focus();
 }
 
-function slaSnelModalOp() {
+function slaSnelModalOp(houdOpen = false) {
   const omschrijving = document.getElementById('snel-onderwerp').value.trim();
   if (!omschrijving) { document.getElementById('snel-onderwerp').focus(); return; }
   const tijdstip = document.getElementById('snel-tijd').value || null;
@@ -924,14 +1043,22 @@ function slaSnelModalOp() {
     notities: '',
     afgerond: false,
     afgerondDatum: null,
+    snelToegevoegd: true,
     aangemaakt: new Date().toISOString()
   };
   taken.push(taak);
   if (!dagPlanning[huidigeDag]) dagPlanning[huidigeDag] = {};
   dagPlanning[huidigeDag][taak.id] = { gedaan: false, overgenomen: false, tijdstip };
-  document.getElementById('snel-modal-overlay').classList.add('hidden');
   slaData();
   renderDag();
+
+  if (houdOpen) {
+    document.getElementById('snel-onderwerp').value = '';
+    setTijdstipPickerWaarde('snel-tijd-picker', '');
+    document.getElementById('snel-onderwerp').focus();
+  } else {
+    document.getElementById('snel-modal-overlay').classList.add('hidden');
+  }
 }
 
 function sluitSnelModal() {
@@ -947,6 +1074,7 @@ function isBelangrijk(t) { return t.prio <= 5; }
 // ===== STANDAARD DAGACTIES =====
 function slaStandaarden() {
   Storage.set('actielijst_standaarden', standaarden);
+  Storage.set('actielijst_laatstGewijzigd', Date.now());
   clearTimeout(syncTimeout);
   syncTimeout = setTimeout(syncServer, 800);
 }
@@ -964,7 +1092,7 @@ function renderStandaardenModal() {
     beheerLijst.innerHTML = '<div class="standaarden-leeg">Nog geen standaarden. Voeg er hieronder een toe.</div>';
   } else {
     beheerLijst.innerHTML = standaarden.map(s => `
-      <div class="standaard-rij" data-id="${s.id}">
+      <div class="standaard-rij standaard-${s.type === 'prive' ? 'prive' : 'zakelijk'}" data-id="${s.id}">
         <input type="text" class="standaard-naam-input filter-select" value="${escHtml(s.naam)}" placeholder="Naam">
         <input type="time" class="standaard-tijd-input filter-select" value="${s.tijdstip || ''}">
         <select class="standaard-type-select filter-select">
@@ -986,6 +1114,8 @@ function renderStandaardenModal() {
       });
       rij.querySelector('.standaard-type-select').addEventListener('change', function() {
         updateStandaard(id, 'type', this.value);
+        rij.classList.toggle('standaard-prive', this.value === 'prive');
+        rij.classList.toggle('standaard-zakelijk', this.value !== 'prive');
       });
       rij.querySelector('.standaard-delete-btn').addEventListener('click', () => verwijderStandaard(id));
     });
@@ -998,7 +1128,7 @@ function renderStandaardenModal() {
   } else {
     dagSectie.style.display = '';
     dagLijst.innerHTML = standaarden.map(s => `
-      <div class="standaard-dag-rij" data-id="${s.id}">
+      <div class="standaard-dag-rij standaard-${s.type === 'prive' ? 'prive' : 'zakelijk'}" data-id="${s.id}">
         <label class="standaard-dag-label">
           <input type="checkbox" class="standaard-dag-check">
           <span>${escHtml(s.naam)}</span>
@@ -1674,6 +1804,41 @@ function renderStatistieken() {
   container.innerHTML = overzichtHTML + themaHTML + kwadrantHTML + prioHTML + weekdagHTML + weekHTML + maandHTML + werkdruk60HTML + werkdruk12MHTML + statHTML;
 }
 
+// ===== URL PARAMETERS =====
+function verwerkUrlParameters() {
+  const params = new URLSearchParams(window.location.search);
+  const omschrijving = params.get('taak');
+  if (!omschrijving) return;
+
+  const taak = {
+    id: genId(),
+    omschrijving: omschrijving.trim(),
+    thema: params.get('thema') || 'Overig',
+    type: params.get('type') || 'zakelijk',
+    periode: params.get('periode') || 'B',
+    grootte: params.get('grootte') || 'M',
+    prio: parseInt(params.get('prio')) || 5,
+    tijdstip: params.get('tijdstip') || null,
+    notities: params.get('notities') || '',
+    altijdBewaren: false,
+    wachten: false,
+    afgerond: false,
+    afgerondDatum: null,
+    aangemaakt: new Date().toISOString()
+  };
+
+  taken.push(taak);
+
+  if (params.get('dag') === 'vandaag') {
+    if (!dagPlanning[vandaagStr()]) dagPlanning[vandaagStr()] = {};
+    dagPlanning[vandaagStr()][taak.id] = { gedaan: false, overgenomen: false };
+  }
+
+  slaData();
+  window.history.replaceState({}, '', window.location.pathname);
+  console.log('[URL] taak toegevoegd:', taak.omschrijving);
+}
+
 // ===== HELPERS =====
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2,7);
@@ -1703,18 +1868,13 @@ function wisselTab(naam) {
 }
 
 // ===== INIT =====
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   laadData();
+  await laadVanServer();
   carryForward();
+  verwerkUrlParameters();
   renderAlles();
-  console.log('[INIT] localStorage: taken:', taken.length, '| dagPlanning datums:', Object.keys(dagPlanning).length);
-  if (taken.length === 0 && Object.keys(dagPlanning).length === 0) {
-    console.log('[INIT] localStorage leeg → laden van server');
-    laadVanServer();
-  } else {
-    console.log('[INIT] localStorage heeft data → push naar server');
-    syncServer();
-  }
+  console.log('[INIT] na server-load: taken:', taken.length, '| dagPlanning datums:', Object.keys(dagPlanning).length);
 
   // Info popup: sluiten bij klik buiten popup
   document.addEventListener('click', () => {
@@ -1736,6 +1896,14 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('dag-tijdstip-modal-overlay').addEventListener('click', e => {
     if (e.target === e.currentTarget) document.getElementById('dag-tijdstip-modal-overlay').classList.add('hidden');
+  });
+
+  // Verplaats-naar-datum modal
+  document.getElementById('verplaats-modal-opslaan').addEventListener('click', slaVerplaatsOp);
+  document.getElementById('verplaats-modal-sluiten').addEventListener('click', sluitVerplaatsModal);
+  document.getElementById('verplaats-modal-annuleren').addEventListener('click', sluitVerplaatsModal);
+  document.getElementById('verplaats-modal-overlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) sluitVerplaatsModal();
   });
 
   // Tab navigatie
@@ -1774,6 +1942,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target === e.currentTarget) document.getElementById('standaarden-modal-overlay').classList.add('hidden');
   });
   document.getElementById('standaarden-toevoegen-btn').addEventListener('click', voegStandaardenToeAanDag);
+  document.getElementById('standaarden-toevoegen-inline').addEventListener('click', voegStandaardenToeAanDag);
   document.getElementById('nieuw-standaard-btn').addEventListener('click', voegNieuweStandaardToe);
   document.getElementById('nieuw-standaard-naam').addEventListener('keydown', e => {
     if (e.key === 'Enter') voegNieuweStandaardToe();
@@ -1781,6 +1950,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Master nieuw
   document.getElementById('nieuwe-taak-btn').addEventListener('click', openNieuweTaakModal);
+  document.getElementById('standaarden-master-btn').addEventListener('click', openStandaardenModal);
   document.getElementById('export-btn').addEventListener('click', exporteerData);
   document.getElementById('import-btn').addEventListener('click', importeerData);
   document.getElementById('import-file-input').addEventListener('change', function() {
@@ -1822,17 +1992,25 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('modal-opslaan').addEventListener('click', slaModalOp);
   document.getElementById('modal-sluiten').addEventListener('click', sluitModal);
   document.getElementById('modal-annuleren').addEventListener('click', sluitModal);
-  document.getElementById('modal-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) sluitModal(); });
+  document.getElementById('modal-overlay').addEventListener('click', e => {
+    if (e.target !== e.currentTarget) return;
+    if (bewerkTaakId && bewerkSnapshot && getModalSnapshot() !== bewerkSnapshot) {
+      const omschrijving = document.getElementById('taak-omschrijving').value.trim();
+      if (omschrijving) { slaModalOp(); return; }
+    }
+    sluitModal();
+  });
 
   // Enter in modal
   document.getElementById('taak-omschrijving').addEventListener('keydown', e => { if (e.key === 'Enter') slaModalOp(); });
 
   // Snel toevoegen modal
-  document.getElementById('snel-modal-opslaan').addEventListener('click', slaSnelModalOp);
+  document.getElementById('snel-modal-opslaan').addEventListener('click', () => slaSnelModalOp(false));
+  document.getElementById('snel-modal-nogeen').addEventListener('click', () => slaSnelModalOp(true));
   document.getElementById('snel-modal-sluiten').addEventListener('click', sluitSnelModal);
   document.getElementById('snel-modal-annuleren').addEventListener('click', sluitSnelModal);
   document.getElementById('snel-modal-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) sluitSnelModal(); });
-  document.getElementById('snel-onderwerp').addEventListener('keydown', e => { if (e.key === 'Enter') slaSnelModalOp(); });
+  document.getElementById('snel-onderwerp').addEventListener('keydown', e => { if (e.key === 'Enter') slaSnelModalOp(false); });
 
   // Selecteer modal
   document.getElementById('select-modal-sluiten').addEventListener('click', () => {
