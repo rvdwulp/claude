@@ -154,7 +154,7 @@ function carryForward() {
   // Doorloop ALLE verleden dagen (ook als er meerdere werkdagen zijn overgeslagen)
   const verledenDagen = Object.keys(dagPlanning).filter(d => d < vandaag).sort();
 
-  let overgenomen = 0;
+  let overgenomen = 0, opgeruimd = 0;
   for (const dag of verledenDagen) {
     const planning = dagPlanning[dag];
     if (!planning) continue;
@@ -163,6 +163,13 @@ function carryForward() {
       if (info.gedaan) continue; // afgevinkt → laat in verleden (archief)
       const taak = taken.find(t => t.id === taakId);
       if (taak?.isStandaard) continue;
+      // Spooktaken: bestaan niet meer, zijn verwijderd of al afgerond in master.
+      // Niet meenemen naar vandaag, maar wel opruimen uit de verleden dag.
+      if (!taak || taak.verwijderd || (taak.afgerond && !taak.altijdBewaren)) {
+        delete planning[taakId];
+        opgeruimd++;
+        continue;
+      }
       if (!dagPlanning[vandaag][taakId]) {
         dagPlanning[vandaag][taakId] = { gedaan: false, overgenomen: true };
         overgenomen++;
@@ -171,7 +178,8 @@ function carryForward() {
     }
   }
 
-  if (overgenomen > 0) slaData(false);
+  console.log('[CARRY] overgenomen naar vandaag:', overgenomen, '| spooktaken opgeruimd:', opgeruimd);
+  if (overgenomen > 0 || opgeruimd > 0) slaData(false);
 }
 
 function formatDatum(str) {
