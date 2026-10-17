@@ -1963,14 +1963,15 @@ function renderKalenderSidebar() {
 
     const acties = taken.filter(t =>
       !t.afgerond && !t.verwijderd && !t.wachten &&
-      (t.grootte === 'L' || t.grootte === 'M') &&
+      (t.grootte === 'XL' || t.grootte === 'L' || t.grootte === 'M') &&
       (thema === 'Privé' ? t.type === 'prive' : t.thema === thema && t.type !== 'prive')
     ).sort((a, b) => {
-      if (a.grootte !== b.grootte) return a.grootte === 'L' ? -1 : 1;
-      return (a.prio||5) - (b.prio||5);
+      const order = { XL: 0, L: 1, M: 2 };
+      const diff = (order[a.grootte] ?? 1) - (order[b.grootte] ?? 1);
+      return diff !== 0 ? diff : (a.prio||5) - (b.prio||5);
     });
 
-    const lActies = acties.filter(t => t.grootte === 'L');
+    const lActies = acties.filter(t => t.grootte !== 'M');
     const mActies = acties.filter(t => t.grootte === 'M');
 
     if (acties.length === 0 && thema !== 'Overig') {
@@ -2072,9 +2073,12 @@ function renderKalenderSidebar() {
 
 function kalSleepItemHtml(t, kleur, teller) {
   const tellerHtml = teller >= 1 ? `<span class="kal-teller">${teller}×</span>` : '';
+  const prioLetters = { 1: 'A', 2: 'B', 3: 'C', 4: 'D' };
+  const prioHtml = t.prio && prioLetters[t.prio] ? `<span class="kal-prio-badge">${prioLetters[t.prio]}</span>` : '';
   return `<div class="kal-sleep-item ${kleur}" draggable="true"
     data-type="actie" data-taak-id="${t.id}" data-thema="${t.type === 'prive' ? 'Privé' : t.thema}" data-label="${escHtml(t.omschrijving)}">
     <span class="kal-grootte-badge">${t.grootte}</span>
+    ${prioHtml}
     <span class="kal-item-label">${escHtml(t.omschrijving)}</span>
     ${tellerHtml}
   </div>`;
@@ -2104,8 +2108,14 @@ function toonKalDatumKiezer(el) {
   const input = popup.querySelector('.kal-datum-input');
   const btn = popup.querySelector('.kal-datum-ok');
 
+  const sluitPopupDoc = () => popup.remove();
+  setTimeout(() => {
+    document.addEventListener('click', sluitPopupDoc, { once: true });
+  }, 0);
+
   btn.addEventListener('click', e => {
     e.stopPropagation();
+    document.removeEventListener('click', sluitPopupDoc);
     const datum = input.value;
     if (!datum) return;
     if (!kalenderData[datum]) kalenderData[datum] = [];
@@ -2116,9 +2126,6 @@ function toonKalDatumKiezer(el) {
   });
 
   popup.addEventListener('click', e => e.stopPropagation());
-  setTimeout(() => {
-    document.addEventListener('click', () => popup.remove(), { once: true });
-  }, 0);
 }
 
 function renderKalenderGrid() {
