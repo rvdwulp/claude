@@ -1518,10 +1518,16 @@ header h1 {
 }
 
 /* ===== KALENDER ===== */
+#tab-kalender {
+  max-width: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
 .kalender-layout {
   display: flex;
   gap: 0;
-  height: calc(100vh - 100px);
+  height: calc(100vh - 54px);
   overflow: hidden;
 }
 
