@@ -1962,7 +1962,7 @@ function renderKalenderSidebar() {
     const state = kalSidebarState[thema];
 
     const acties = taken.filter(t =>
-      !t.gereed && !t.wachten &&
+      !t.afgerond && !t.verwijderd && !t.wachten &&
       (t.grootte === 'L' || t.grootte === 'M') &&
       (thema === 'Privé' ? t.type === 'prive' : t.thema === thema && t.type !== 'prive')
     ).sort((a, b) => {
