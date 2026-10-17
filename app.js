@@ -292,6 +292,7 @@ function renderDagLijst(containerId, taken, sectieNaam) {
       <div class="task-actions">
         ${!gedaan && huidigeDag !== vandaagStr() ? `<button class="task-action-btn" onclick="verplaatsNaarVandaag('${t.id}', '${huidigeDag}', event)" data-tooltip="Naar vandaag">&#10142;</button>` : ''}
         ${!gedaan ? `<button class="task-action-btn" onclick="openVerplaatsDatumModal('${t.id}', '${huidigeDag}', event)" data-tooltip="Verplaats naar datum">&#128197;</button>` : ''}
+        <button class="task-action-btn" onclick="bewerkDagActie('${t.id}', event)" data-tooltip="Bewerken">&#x270F;&#xFE0F;</button>
         <button class="task-action-btn" onclick="openTijdstipModal('${t.id}', event)" data-tooltip="Tijdstip instellen">&#128336;</button>
         <button class="task-action-btn" onclick="verwijderUitDag('${t.id}', event)" data-tooltip="Verwijder uit dag">&#x2715;</button>
       </div>
@@ -1039,6 +1040,19 @@ function slaSnelModalOp(houdOpen = false) {
   if (!omschrijving) { document.getElementById('snel-onderwerp').focus(); return; }
   const tijdstip = document.getElementById('snel-tijd').value || null;
 
+  // Bewerkmodus voor dag-only actie
+  if (bewerkDagActieId) {
+    const dagInfo = dagPlanning[huidigeDag]?.[bewerkDagActieId];
+    if (dagInfo) {
+      dagPlanning[huidigeDag][bewerkDagActieId] = { ...dagInfo, omschrijving, tijdstip };
+      slaData();
+      renderDag();
+    }
+    bewerkDagActieId = null;
+    document.getElementById('snel-modal-overlay').classList.add('hidden');
+    return;
+  }
+
   const taak = {
     id: genId(),
     omschrijving,
@@ -1070,7 +1084,30 @@ function slaSnelModalOp(houdOpen = false) {
 }
 
 function sluitSnelModal() {
+  bewerkDagActieId = null;
   document.getElementById('snel-modal-overlay').classList.add('hidden');
+}
+
+// ===== DAGACTIE BEWERKEN =====
+let bewerkDagActieId = null;
+
+function bewerkDagActie(taakId, event) {
+  event.stopPropagation();
+  const taakInMaster = taken.find(t => t.id === taakId);
+  if (taakInMaster) {
+    // Taak bestaat in master → open volledig modal
+    bewerkTaak(taakId);
+  } else {
+    // Dag-only actie (bijv. standaard-dagactie) → open snel-modal met bestaande waarden
+    const dagInfo = dagPlanning[huidigeDag]?.[taakId];
+    if (!dagInfo) return;
+    bewerkDagActieId = taakId;
+    document.getElementById('snel-modal-titel').textContent = 'Dagactie bewerken';
+    document.getElementById('snel-onderwerp').value = dagInfo.omschrijving || '';
+    setTijdstipPickerWaarde('snel-tijd-picker', dagInfo.tijdstip || '');
+    document.getElementById('snel-modal-overlay').classList.remove('hidden');
+    document.getElementById('snel-onderwerp').focus();
+  }
 }
 
 // ===== URGENT / BELANGRIJK (automatisch) =====
@@ -1848,6 +1885,17 @@ function verwerkUrlParameters() {
 }
 
 // ===== HELPERS =====
+function maakOverlaySluiten(overlayEl, sluitFn) {
+  let startOpOverlay = false;
+  overlayEl.addEventListener('mousedown', e => {
+    startOpOverlay = e.target === overlayEl;
+  });
+  overlayEl.addEventListener('mouseup', e => {
+    if (startOpOverlay && e.target === overlayEl) sluitFn();
+    startOpOverlay = false;
+  });
+}
+
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 }
@@ -1902,17 +1950,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('dag-tijdstip-annuleren').addEventListener('click', () => {
     document.getElementById('dag-tijdstip-modal-overlay').classList.add('hidden');
   });
-  document.getElementById('dag-tijdstip-modal-overlay').addEventListener('click', e => {
-    if (e.target === e.currentTarget) document.getElementById('dag-tijdstip-modal-overlay').classList.add('hidden');
+  maakOverlaySluiten(document.getElementById('dag-tijdstip-modal-overlay'), () => {
+    document.getElementById('dag-tijdstip-modal-overlay').classList.add('hidden');
   });
 
   // Verplaats-naar-datum modal
   document.getElementById('verplaats-modal-opslaan').addEventListener('click', slaVerplaatsOp);
   document.getElementById('verplaats-modal-sluiten').addEventListener('click', sluitVerplaatsModal);
   document.getElementById('verplaats-modal-annuleren').addEventListener('click', sluitVerplaatsModal);
-  document.getElementById('verplaats-modal-overlay').addEventListener('click', e => {
-    if (e.target === e.currentTarget) sluitVerplaatsModal();
-  });
+  maakOverlaySluiten(document.getElementById('verplaats-modal-overlay'), sluitVerplaatsModal);
 
   // Tab navigatie
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1946,8 +1992,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('standaarden-annuleren').addEventListener('click', () => {
     document.getElementById('standaarden-modal-overlay').classList.add('hidden');
   });
-  document.getElementById('standaarden-modal-overlay').addEventListener('click', e => {
-    if (e.target === e.currentTarget) document.getElementById('standaarden-modal-overlay').classList.add('hidden');
+  maakOverlaySluiten(document.getElementById('standaarden-modal-overlay'), () => {
+    document.getElementById('standaarden-modal-overlay').classList.add('hidden');
   });
   document.getElementById('standaarden-toevoegen-btn').addEventListener('click', voegStandaardenToeAanDag);
   document.getElementById('standaarden-toevoegen-inline').addEventListener('click', voegStandaardenToeAanDag);
@@ -2000,8 +2046,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('modal-opslaan').addEventListener('click', slaModalOp);
   document.getElementById('modal-sluiten').addEventListener('click', sluitModal);
   document.getElementById('modal-annuleren').addEventListener('click', sluitModal);
-  document.getElementById('modal-overlay').addEventListener('click', e => {
-    if (e.target !== e.currentTarget) return;
+  maakOverlaySluiten(document.getElementById('modal-overlay'), () => {
     if (bewerkTaakId && bewerkSnapshot && getModalSnapshot() !== bewerkSnapshot) {
       const omschrijving = document.getElementById('taak-omschrijving').value.trim();
       if (omschrijving) { slaModalOp(); return; }
@@ -2017,7 +2062,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('snel-modal-nogeen').addEventListener('click', () => slaSnelModalOp(true));
   document.getElementById('snel-modal-sluiten').addEventListener('click', sluitSnelModal);
   document.getElementById('snel-modal-annuleren').addEventListener('click', sluitSnelModal);
-  document.getElementById('snel-modal-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) sluitSnelModal(); });
+  maakOverlaySluiten(document.getElementById('snel-modal-overlay'), sluitSnelModal);
   document.getElementById('snel-onderwerp').addEventListener('keydown', e => { if (e.key === 'Enter') slaSnelModalOp(false); });
 
   // Selecteer modal
