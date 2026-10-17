@@ -1898,7 +1898,7 @@ function verwerkUrlParameters() {
 const THEMAS = ['IURC', 'AI', 'Innovatie', 'DHM', 'TD', 'EU', 'Spreker', 'Overig', 'Privé'];
 
 const KAL_STANDAARDEN = [
-  'Vrije dag', 'Buitenlandse dienstreis', 'Korte dag', 'Vrije woensdag', 'Feestdag',
+  'Vrije dag', 'Buitenlandse dienstreis', 'Korte dag', 'Feestdag',
   'Congres / conferentie', 'Uitje / teamdag', 'Vergadering (groot)'
 ];
 
@@ -2144,12 +2144,15 @@ function renderKalenderGrid() {
 
     html += `<div class="kal-maand-blok">`;
     html += `<div class="kal-maand-header">${MAAND_NAMEN[maand]} ${jaar}</div>`;
-    html += `<div class="kal-week-headers">${DAG_NAMEN.map(d => `<div class="kal-week-header">${d}</div>`).join('')}</div>`;
+    html += `<div class="kal-week-headers">${DAG_NAMEN.slice(0, 5).map(d => `<div class="kal-week-header">${d}</div>`).join('')}</div>`;
     html += `<div class="kal-grid">`;
 
     // Lege cellen voor begin
-    for (let i = 0; i < startDag; i++) {
+    const vrijeWoUit = kalenderData._vrijeWoUit || [];
+    let cellen = 0;
+    for (let i = 0; i < (startDag < 5 ? startDag : 0); i++) {
       html += `<div class="kal-dag buiten-maand"></div>`;
+      cellen++;
     }
 
     for (let dag = 1; dag <= aantalDagen; dag++) {
@@ -2158,6 +2161,9 @@ function renderKalenderGrid() {
       const isVerleden = datStr < vandaag;
       const feestdag = NL_FEESTDAGEN[datStr];
       const items = kalenderData[datStr] || [];
+      const weekdag = (startDag + dag - 1) % 7;
+      if (weekdag >= 5) continue;
+      cellen++;
 
       let cls = 'kal-dag';
       if (isVandaag) cls += ' vandaag';
@@ -2171,9 +2177,14 @@ function renderKalenderGrid() {
         html += `<div class="kal-blokje type-feestdag"><span class="kal-blokje-label">${escHtml(feestdag)}</span></div>`;
       }
 
+      if (weekdag === 2 && !feestdag && !vrijeWoUit.includes(datStr)) {
+        html += `<div class="kal-blokje type-standaard type-vrijewo"><span class="kal-blokje-label">Vrije woensdag</span>
+          <span class="kal-blokje-verwijder" data-vrijewo="${datStr}" title="Verwijderen">×</span></div>`;
+      }
+
       for (const item of items) {
         const taak = item.taakId ? taken.find(t => t.id === item.taakId) : null;
-        const gereed = taak?.gereed ? '<span class="kal-blokje-check">✓</span>' : '';
+        const gereed = taak?.afgerond ? '<span class="kal-blokje-check">✓</span>' : '';
         const themaKlasse = item.thema ? `kal-thema-${item.thema}` : 'type-standaard';
         const isEditbaar = item.type === 'thema' || item.type === 'standaard';
         html += `<div class="kal-blokje ${themaKlasse}" data-item-id="${item.id}" data-datum="${datStr}">
@@ -2187,10 +2198,9 @@ function renderKalenderGrid() {
     }
 
     // Afsluiten rij
-    const totaalCellen = startDag + aantalDagen;
-    const rest = totaalCellen % 7;
+    const rest = cellen % 5;
     if (rest > 0) {
-      for (let i = rest; i < 7; i++) {
+      for (let i = rest; i < 5; i++) {
         html += `<div class="kal-dag buiten-maand"></div>`;
       }
     }
@@ -2232,6 +2242,12 @@ function renderKalenderGrid() {
   grid.querySelectorAll('.kal-blokje-verwijder').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
+      if (btn.dataset.vrijewo) {
+        kalenderData._vrijeWoUit = [...(kalenderData._vrijeWoUit || []), btn.dataset.vrijewo];
+        slaData();
+        renderKalender();
+        return;
+      }
       const datum = btn.dataset.datum;
       const id = btn.dataset.itemId;
       if (!kalenderData[datum]) return;
