@@ -1472,7 +1472,10 @@ function eindeMaand(maandStr) {
 }
 
 function getTaakAanmaakDatum(t) {
-  if (t.aangemaakt) return t.aangemaakt.slice(0, 10);
+  if (t.aangemaakt) {
+    if (typeof t.aangemaakt === 'number') return new Date(t.aangemaakt).toISOString().slice(0, 10);
+    return t.aangemaakt.slice(0, 10);
+  }
   try {
     const ts = parseInt(t.id.slice(0, 8), 36);
     if (ts > 1500000000000 && ts < 2100000000000) {
@@ -2307,7 +2310,7 @@ function slaKalNieuwOp() {
 
   const nieuwId = genId();
   if (ookMaster) {
-    taken.push({ id: nieuwId, omschrijving, thema, grootte, prio: 5, periode: 'kwartaal', type: 'werk', gereed: false, aangemaakt: Date.now() });
+    taken.push({ id: nieuwId, omschrijving, thema, grootte, prio: 5, periode: 'kwartaal', type: 'werk', gereed: false, aangemaakt: new Date().toISOString() });
   }
   sluitKalNieuwModal();
   slaData();
