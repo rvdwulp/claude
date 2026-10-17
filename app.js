@@ -1948,6 +1948,9 @@ function kalTaakTeller(taakId) {
   return n;
 }
 
+// Bijhouden welke thema's ingeklapt zijn en of M-acties getoond worden
+const kalSidebarState = {};
+
 function renderKalenderSidebar() {
   const col = document.getElementById('kalender-acties-kolom');
   if (!col) return;
@@ -1955,45 +1958,99 @@ function renderKalenderSidebar() {
 
   for (const thema of THEMAS) {
     const kleur = `kal-thema-${thema}`;
-    html += `<div class="kal-sectie-header" style="">${thema}</div>`;
+    if (!(thema in kalSidebarState)) kalSidebarState[thema] = { open: true, toonM: false };
+    const state = kalSidebarState[thema];
 
-    // Thema blokjes (met naam en leeg)
-    html += `<div class="kal-sleep-item ${kleur}" draggable="true"
-      data-type="thema" data-thema="${thema}" data-label="${thema}">${thema}</div>`;
-    html += `<div class="kal-sleep-item ${kleur}" draggable="true"
-      data-type="thema" data-thema="${thema}" data-label=""
-      style="font-style:italic;opacity:0.7">[leeg ${thema}]</div>`;
-
-    // M en L acties van dit thema
     const acties = taken.filter(t =>
-      !t.gereed && (t.grootte === 'L' || t.grootte === 'M') &&
+      !t.gereed && !t.wachten &&
+      (t.grootte === 'L' || t.grootte === 'M') &&
       (thema === 'Privé' ? t.type === 'prive' : t.thema === thema && t.type !== 'prive')
     ).sort((a, b) => {
       if (a.grootte !== b.grootte) return a.grootte === 'L' ? -1 : 1;
       return (a.prio||5) - (b.prio||5);
     });
 
-    for (const t of acties) {
-      const teller = kalTaakTeller(t.id);
-      const tellerHtml = teller >= 1 ? `<span class="kal-teller">(${teller}×)</span>` : '';
-      html += `<div class="kal-sleep-item ${kleur}" draggable="true"
-        data-type="actie" data-taak-id="${t.id}" data-thema="${thema}" data-label="${escHtml(t.omschrijving)}">
-        <span class="kal-grootte">${t.grootte}</span>
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis">${escHtml(t.omschrijving)}</span>
-        ${tellerHtml}
-      </div>`;
+    const lActies = acties.filter(t => t.grootte === 'L');
+    const mActies = acties.filter(t => t.grootte === 'M');
+
+    if (acties.length === 0 && thema !== 'Overig') {
+      // Thema zonder actieve M/L acties: toon alleen header, inklappen
     }
+
+    html += `<div class="kal-sectie-header kal-thema-header-${thema}" data-thema="${thema}">
+      <span class="kal-thema-toggle">${state.open ? '▾' : '▸'}</span>
+      <span>${thema}</span>
+      <span class="kal-thema-count">${acties.length}</span>
+    </div>`;
+
+    if (!state.open) continue;
+
+    html += `<div class="kal-thema-body" data-thema="${thema}">`;
+
+    // Thema-blokjes
+    html += `<div class="kal-sleep-item ${kleur}" draggable="true"
+      data-type="thema" data-thema="${thema}" data-label="${thema}">
+      <span class="kal-item-label">${thema}</span>
+    </div>`;
+    html += `<div class="kal-sleep-item ${kleur} kal-leeg" draggable="true"
+      data-type="thema" data-thema="${thema}" data-label="">
+      <span class="kal-item-label">[leeg]</span>
+    </div>`;
+
+    // L-acties altijd zichtbaar
+    for (const t of lActies) {
+      const teller = kalTaakTeller(t.id);
+      html += kalSleepItemHtml(t, kleur, teller);
+    }
+
+    // M-acties achter toggle
+    if (mActies.length > 0) {
+      html += `<div class="kal-m-toggle" data-thema="${thema}">
+        ${state.toonM ? '▾' : '▸'} ${mActies.length} M-acties
+      </div>`;
+      if (state.toonM) {
+        for (const t of mActies) {
+          const teller = kalTaakTeller(t.id);
+          html += kalSleepItemHtml(t, kleur, teller);
+        }
+      }
+    }
+
+    html += `</div>`;
   }
 
   // Standaarden
-  html += `<div class="kal-sectie-header">Standaarden</div>`;
+  html += `<div class="kal-sectie-header kal-sectie-standaarden">Standaarden</div>`;
+  html += `<div class="kal-thema-body">`;
   for (const s of KAL_STANDAARDEN) {
     html += `<div class="kal-sleep-item type-standaard" draggable="true"
-      data-type="standaard" data-label="${escHtml(s)}">${escHtml(s)}</div>`;
+      data-type="standaard" data-label="${escHtml(s)}">
+      <span class="kal-item-label">${escHtml(s)}</span>
+    </div>`;
   }
+  html += `</div>`;
 
   col.innerHTML = html;
 
+  // Thema-header toggle (inklapbaar)
+  col.querySelectorAll('.kal-sectie-header[data-thema]').forEach(h => {
+    h.addEventListener('click', () => {
+      const t = h.dataset.thema;
+      kalSidebarState[t].open = !kalSidebarState[t].open;
+      renderKalenderSidebar();
+    });
+  });
+
+  // M-acties toggle
+  col.querySelectorAll('.kal-m-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = btn.dataset.thema;
+      kalSidebarState[t].toonM = !kalSidebarState[t].toonM;
+      renderKalenderSidebar();
+    });
+  });
+
+  // Drag
   col.querySelectorAll('.kal-sleep-item').forEach(el => {
     el.addEventListener('dragstart', e => {
       e.dataTransfer.setData('application/json', JSON.stringify({
@@ -2004,7 +2061,64 @@ function renderKalenderSidebar() {
       }));
       e.dataTransfer.effectAllowed = 'copy';
     });
+
+    // Dubbelklik → datumkiezer popup
+    el.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      toonKalDatumKiezer(el);
+    });
   });
+}
+
+function kalSleepItemHtml(t, kleur, teller) {
+  const tellerHtml = teller >= 1 ? `<span class="kal-teller">${teller}×</span>` : '';
+  return `<div class="kal-sleep-item ${kleur}" draggable="true"
+    data-type="actie" data-taak-id="${t.id}" data-thema="${t.type === 'prive' ? 'Privé' : t.thema}" data-label="${escHtml(t.omschrijving)}">
+    <span class="kal-grootte-badge">${t.grootte}</span>
+    <span class="kal-item-label">${escHtml(t.omschrijving)}</span>
+    ${tellerHtml}
+  </div>`;
+}
+
+function toonKalDatumKiezer(el) {
+  // Verwijder eventueel bestaande popup
+  document.querySelectorAll('.kal-datum-popup').forEach(p => p.remove());
+
+  const data = {
+    type: el.dataset.type,
+    taakId: el.dataset.taakId || null,
+    thema: el.dataset.thema || null,
+    label: el.dataset.label || ''
+  };
+
+  const popup = document.createElement('div');
+  popup.className = 'kal-datum-popup';
+  popup.innerHTML = `
+    <div class="kal-datum-popup-label">Toevoegen aan datum:</div>
+    <input type="date" class="kal-datum-input" value="${vandaagStr()}">
+    <button class="primary-btn kal-datum-ok">Toevoegen</button>
+  `;
+
+  el.appendChild(popup);
+
+  const input = popup.querySelector('.kal-datum-input');
+  const btn = popup.querySelector('.kal-datum-ok');
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const datum = input.value;
+    if (!datum) return;
+    if (!kalenderData[datum]) kalenderData[datum] = [];
+    kalenderData[datum].push({ id: genId(), ...data });
+    slaData();
+    popup.remove();
+    renderKalender();
+  });
+
+  popup.addEventListener('click', e => e.stopPropagation());
+  setTimeout(() => {
+    document.addEventListener('click', () => popup.remove(), { once: true });
+  }, 0);
 }
 
 function renderKalenderGrid() {
