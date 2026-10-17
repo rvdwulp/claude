@@ -45,6 +45,7 @@ function laadData() {
   const rawDag = localStorage.getItem('actielijst_dagPlanning');
   console.log('[LOAD-RAW] actielijst_dagPlanning in localStorage:', rawDag ? rawDag.substring(0, 120) : 'NULL/LEEG');
   taken = Storage.get('actielijst_taken', []);
+  taken.forEach(t => { if (typeof t.aangemaakt === 'number') t.aangemaakt = new Date(t.aangemaakt).toISOString(); if (t.type === 'werk') t.type = 'zakelijk'; });
   dagPlanning = normDagPlanning(Storage.get('actielijst_dagPlanning', {}));
   standaarden = Storage.get('actielijst_standaarden', []);
   records = Storage.get('actielijst_records', { besteDagen: [], besteMaanden: [] });
@@ -106,6 +107,7 @@ async function laadVanServer() {
     if (data.heeftData) {
       if (Array.isArray(data.taken)) {
         taken = data.taken;
+    taken.forEach(t => { if (typeof t.aangemaakt === 'number') t.aangemaakt = new Date(t.aangemaakt).toISOString(); if (t.type === 'werk') t.type = 'zakelijk'; });
         Storage.set('actielijst_taken', taken);
       }
       if (data.dagPlanning && typeof data.dagPlanning === 'object') {
@@ -637,7 +639,7 @@ function renderMaster() {
     if (sortering === 'prio') gesorteerd = gefilterd.sort((a,b) => (a.prio||5) - (b.prio||5));
     else if (sortering === 'periode') gesorteerd = gefilterd.sort((a,b) => (a.periode||'').localeCompare(b.periode||''));
     else if (sortering === 'type') gesorteerd = gefilterd.sort((a,b) => (a.type||'').localeCompare(b.type||''));
-    else if (sortering === 'aangemaakt') gesorteerd = gefilterd.sort((a,b) => (b.aangemaakt||'').localeCompare(a.aangemaakt||''));
+    else if (sortering === 'aangemaakt') gesorteerd = gefilterd.sort((a,b) => String(b.aangemaakt||'').localeCompare(String(a.aangemaakt||'')));
     container.innerHTML = `<div class="thema-groep">
       <div class="thema-header">Gesorteerd op: ${sortering}</div>
       ${gesorteerd.map(taak => renderMasterKaart(taak)).join('')}
@@ -2310,7 +2312,7 @@ function slaKalNieuwOp() {
 
   const nieuwId = genId();
   if (ookMaster) {
-    taken.push({ id: nieuwId, omschrijving, thema, grootte, prio: 5, periode: 'kwartaal', type: 'werk', gereed: false, aangemaakt: new Date().toISOString() });
+    taken.push({ id: nieuwId, omschrijving, thema, grootte, prio: 5, periode: 'kwartaal', type: thema === 'Privé' ? 'prive' : 'zakelijk', aangemaakt: new Date().toISOString() });
   }
   sluitKalNieuwModal();
   slaData();
