@@ -19,6 +19,7 @@
         <button class="tab-btn" data-tab="matrix">Matrix</button>
         <button class="tab-btn" data-tab="archief">Archief</button>
         <button class="tab-btn" data-tab="stats">Stats</button>
+        <button class="tab-btn" data-tab="kalender">Kalender</button>
       </nav>
       <div class="header-right">
         <button id="sync-btn" class="icon-btn" title="Sync status">⟳</button>
@@ -185,6 +186,25 @@
     </div>
 
     <!-- STATS TAB -->
+    <!-- KALENDER TAB -->
+    <div id="tab-kalender" class="tab-content">
+      <div class="kalender-layout">
+        <div class="kalender-sidebar">
+          <div class="kalender-sidebar-nav">
+            <button class="secondary-btn" id="kal-prev">‹ Eerder</button>
+            <button class="secondary-btn" id="kal-next">Later ›</button>
+          </div>
+          <div id="kalender-acties-kolom"></div>
+          <div class="kalender-nieuw-actie">
+            <button class="primary-btn" id="kal-nieuw-actie-btn">＋ Nieuwe actie</button>
+          </div>
+        </div>
+        <div class="kalender-grid-wrapper">
+          <div id="kalender-grid"></div>
+        </div>
+      </div>
+    </div>
+
     <div id="tab-stats" class="tab-content">
       <div id="stats-content"></div>
     </div>
@@ -463,6 +483,50 @@
       <div class="modal-footer">
         <button class="secondary-btn" id="dag-tijdstip-annuleren">Annuleren</button>
         <button class="primary-btn" id="dag-tijdstip-opslaan">Opslaan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Kalender nieuwe actie -->
+  <div id="kal-nieuw-modal-overlay" class="modal-overlay hidden">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header">
+        <h2>Nieuwe kalenderactie</h2>
+        <button class="close-btn" id="kal-nieuw-sluiten">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Omschrijving</label>
+          <input type="text" id="kal-nieuw-omschrijving" class="text-input" placeholder="Wat moet er gebeuren?">
+        </div>
+        <div class="form-group">
+          <label>Thema</label>
+          <select id="kal-nieuw-thema" class="filter-select">
+            <option value="IURC">IURC</option>
+            <option value="AI">AI</option>
+            <option value="Innovatie">Innovatie</option>
+            <option value="DHM">DHM</option>
+            <option value="TD">TD</option>
+            <option value="EU">EU</option>
+            <option value="Spreker">Spreker</option>
+            <option value="Overig">Overig</option>
+            <option value="Privé">Privé</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Grootte</label>
+          <select id="kal-nieuw-grootte" class="filter-select">
+            <option value="L">L — groot</option>
+            <option value="M">M — middel</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox" id="kal-nieuw-ook-master"> Ook toevoegen aan Master</label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="secondary-btn" id="kal-nieuw-annuleren">Annuleren</button>
+        <button class="primary-btn" id="kal-nieuw-opslaan">Toevoegen</button>
       </div>
     </div>
   </div>

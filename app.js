@@ -21,6 +21,8 @@ let huidigeTijdstipTaakId = null;
 let standaarden = [];
 let records = { besteDagen: [], besteMaanden: [] };
 let masterKwadrantFilter = null;
+let kalenderData = {};       // { 'YYYY-MM-DD': [ { id, type, taakId?, thema?, label } ] }
+let kalenderStartMaand = null; // Date object, eerste dag van eerste zichtbare maand
 
 function localDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -46,6 +48,7 @@ function laadData() {
   dagPlanning = normDagPlanning(Storage.get('actielijst_dagPlanning', {}));
   standaarden = Storage.get('actielijst_standaarden', []);
   records = Storage.get('actielijst_records', { besteDagen: [], besteMaanden: [] });
+  kalenderData = Storage.get('actielijst_kalender', {});
   const dagKeys = dagPlanning[vandaagStr()] ? Object.keys(dagPlanning[vandaagStr()]).filter(k => !k.startsWith('__')) : [];
   console.log('[LOAD] taken:', taken.length, '| vandaag in dagPlanning:', dagKeys.length, dagKeys);
 }
@@ -56,6 +59,7 @@ function slaData(syncNaarServer = true) {
   Storage.set('actielijst_taken', taken);
   Storage.set('actielijst_dagPlanning', dagPlanning);
   Storage.set('actielijst_standaarden', standaarden);
+  Storage.set('actielijst_kalender', kalenderData);
   Storage.set('actielijst_laatstGewijzigd', Date.now());
   const rawDag = localStorage.getItem('actielijst_dagPlanning');
   console.log('[SAVE-RAW] na schrijven:', rawDag ? rawDag.substring(0, 120) : 'NULL — schrijven mislukt!');
@@ -1884,6 +1888,311 @@ function verwerkUrlParameters() {
   console.log('[URL] taak toegevoegd:', taak.omschrijving);
 }
 
+// ===== KALENDER =====
+
+const THEMAS = ['IURC', 'AI', 'Innovatie', 'DHM', 'TD', 'EU', 'Spreker', 'Overig', 'Privé'];
+
+const KAL_STANDAARDEN = [
+  'Vrije dag', 'Korte dag', 'Vrije woensdag', 'Feestdag',
+  'Congres / conferentie', 'Uitje / teamdag', 'Vergadering (groot)'
+];
+
+const NL_FEESTDAGEN = {
+  '2025-01-01': 'Nieuwjaarsdag',
+  '2025-04-18': 'Goede Vrijdag',
+  '2025-04-20': 'Eerste Paasdag',
+  '2025-04-21': 'Tweede Paasdag',
+  '2025-04-26': 'Koningsdag',
+  '2025-05-05': 'Bevrijdingsdag',
+  '2025-05-29': 'Hemelvaartsdag',
+  '2025-06-08': 'Eerste Pinksterdag',
+  '2025-06-09': 'Tweede Pinksterdag',
+  '2025-12-25': 'Eerste Kerstdag',
+  '2025-12-26': 'Tweede Kerstdag',
+  '2026-01-01': 'Nieuwjaarsdag',
+  '2026-04-03': 'Goede Vrijdag',
+  '2026-04-05': 'Eerste Paasdag',
+  '2026-04-06': 'Tweede Paasdag',
+  '2026-04-27': 'Koningsdag',
+  '2026-05-05': 'Bevrijdingsdag',
+  '2026-05-14': 'Hemelvaartsdag',
+  '2026-05-24': 'Eerste Pinksterdag',
+  '2026-05-25': 'Tweede Pinksterdag',
+  '2026-12-25': 'Eerste Kerstdag',
+  '2026-12-26': 'Tweede Kerstdag',
+  '2027-01-01': 'Nieuwjaarsdag',
+  '2027-03-26': 'Goede Vrijdag',
+  '2027-03-28': 'Eerste Paasdag',
+  '2027-03-29': 'Tweede Paasdag',
+  '2027-04-26': 'Koningsdag',
+  '2027-05-05': 'Bevrijdingsdag',
+  '2027-05-06': 'Hemelvaartsdag',
+  '2027-05-16': 'Eerste Pinksterdag',
+  '2027-05-17': 'Tweede Pinksterdag',
+  '2027-12-25': 'Eerste Kerstdag',
+  '2027-12-26': 'Tweede Kerstdag',
+};
+
+const MAAND_NAMEN = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+const DAG_NAMEN = ['ma','di','wo','do','vr','za','zo'];
+
+function kalenderDatumStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function kalTaakTeller(taakId) {
+  let n = 0;
+  for (const items of Object.values(kalenderData)) {
+    for (const b of items) { if (b.taakId === taakId) n++; }
+  }
+  return n;
+}
+
+function renderKalenderSidebar() {
+  const col = document.getElementById('kalender-acties-kolom');
+  if (!col) return;
+  let html = '';
+
+  for (const thema of THEMAS) {
+    const kleur = `kal-thema-${thema}`;
+    html += `<div class="kal-sectie-header" style="">${thema}</div>`;
+
+    // Thema blokjes (met naam en leeg)
+    html += `<div class="kal-sleep-item ${kleur}" draggable="true"
+      data-type="thema" data-thema="${thema}" data-label="${thema}">${thema}</div>`;
+    html += `<div class="kal-sleep-item ${kleur}" draggable="true"
+      data-type="thema" data-thema="${thema}" data-label=""
+      style="font-style:italic;opacity:0.7">[leeg ${thema}]</div>`;
+
+    // M en L acties van dit thema
+    const acties = taken.filter(t =>
+      !t.gereed && (t.grootte === 'L' || t.grootte === 'M') &&
+      (thema === 'Privé' ? t.type === 'prive' : t.thema === thema && t.type !== 'prive')
+    ).sort((a, b) => {
+      if (a.grootte !== b.grootte) return a.grootte === 'L' ? -1 : 1;
+      return (a.prio||5) - (b.prio||5);
+    });
+
+    for (const t of acties) {
+      const teller = kalTaakTeller(t.id);
+      const tellerHtml = teller >= 1 ? `<span class="kal-teller">(${teller}×)</span>` : '';
+      html += `<div class="kal-sleep-item ${kleur}" draggable="true"
+        data-type="actie" data-taak-id="${t.id}" data-thema="${thema}" data-label="${escHtml(t.omschrijving)}">
+        <span class="kal-grootte">${t.grootte}</span>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis">${escHtml(t.omschrijving)}</span>
+        ${tellerHtml}
+      </div>`;
+    }
+  }
+
+  // Standaarden
+  html += `<div class="kal-sectie-header">Standaarden</div>`;
+  for (const s of KAL_STANDAARDEN) {
+    html += `<div class="kal-sleep-item type-standaard" draggable="true"
+      data-type="standaard" data-label="${escHtml(s)}">${escHtml(s)}</div>`;
+  }
+
+  col.innerHTML = html;
+
+  col.querySelectorAll('.kal-sleep-item').forEach(el => {
+    el.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('application/json', JSON.stringify({
+        type: el.dataset.type,
+        taakId: el.dataset.taakId || null,
+        thema: el.dataset.thema || null,
+        label: el.dataset.label || ''
+      }));
+      e.dataTransfer.effectAllowed = 'copy';
+    });
+  });
+}
+
+function renderKalenderGrid() {
+  const grid = document.getElementById('kalender-grid');
+  if (!grid) return;
+  const vandaag = vandaagStr();
+  let html = '';
+
+  for (let m = 0; m < 6; m++) {
+    const maandDt = new Date(kalenderStartMaand.getFullYear(), kalenderStartMaand.getMonth() + m, 1);
+    const jaar = maandDt.getFullYear();
+    const maand = maandDt.getMonth();
+    const aantalDagen = new Date(jaar, maand + 1, 0).getDate();
+
+    // Eerste dag van de maand (0=zo, 1=ma ... omzetten naar ma=0)
+    let startDag = maandDt.getDay(); // 0=zo
+    startDag = startDag === 0 ? 6 : startDag - 1; // ma=0..zo=6
+
+    html += `<div class="kal-maand-blok">`;
+    html += `<div class="kal-maand-header">${MAAND_NAMEN[maand]} ${jaar}</div>`;
+    html += `<div class="kal-week-headers">${DAG_NAMEN.map(d => `<div class="kal-week-header">${d}</div>`).join('')}</div>`;
+    html += `<div class="kal-grid">`;
+
+    // Lege cellen voor begin
+    for (let i = 0; i < startDag; i++) {
+      html += `<div class="kal-dag buiten-maand"></div>`;
+    }
+
+    for (let dag = 1; dag <= aantalDagen; dag++) {
+      const datStr = `${jaar}-${String(maand+1).padStart(2,'0')}-${String(dag).padStart(2,'0')}`;
+      const isVandaag = datStr === vandaag;
+      const isVerleden = datStr < vandaag;
+      const feestdag = NL_FEESTDAGEN[datStr];
+      const items = kalenderData[datStr] || [];
+
+      let cls = 'kal-dag';
+      if (isVandaag) cls += ' vandaag';
+      else if (isVerleden) cls += ' verleden';
+
+      html += `<div class="${cls}" data-datum="${datStr}">`;
+      html += `<div class="kal-dagnr">${dag}</div>`;
+      html += `<div class="kal-blokjes">`;
+
+      if (feestdag) {
+        html += `<div class="kal-blokje type-feestdag"><span class="kal-blokje-label">${escHtml(feestdag)}</span></div>`;
+      }
+
+      for (const item of items) {
+        const taak = item.taakId ? taken.find(t => t.id === item.taakId) : null;
+        const gereed = taak?.gereed ? '<span class="kal-blokje-check">✓</span>' : '';
+        const themaKlasse = item.thema ? `kal-thema-${item.thema}` : 'type-standaard';
+        const isEditbaar = item.type === 'thema' || item.type === 'standaard';
+        html += `<div class="kal-blokje ${themaKlasse}" data-item-id="${item.id}" data-datum="${datStr}">
+          ${gereed}
+          <span class="kal-blokje-label" ${isEditbaar ? `onderdeel-bewerkbaar="true"` : ''}>${escHtml(item.label || '—')}</span>
+          <span class="kal-blokje-verwijder" data-item-id="${item.id}" data-datum="${datStr}" title="Verwijderen">×</span>
+        </div>`;
+      }
+
+      html += `</div></div>`;
+    }
+
+    // Afsluiten rij
+    const totaalCellen = startDag + aantalDagen;
+    const rest = totaalCellen % 7;
+    if (rest > 0) {
+      for (let i = rest; i < 7; i++) {
+        html += `<div class="kal-dag buiten-maand"></div>`;
+      }
+    }
+
+    html += `</div></div>`;
+  }
+
+  grid.innerHTML = html;
+
+  // Drop handlers
+  grid.querySelectorAll('.kal-dag[data-datum]').forEach(cel => {
+    cel.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      cel.classList.add('drag-over');
+    });
+    cel.addEventListener('dragleave', () => cel.classList.remove('drag-over'));
+    cel.addEventListener('drop', e => {
+      e.preventDefault();
+      cel.classList.remove('drag-over');
+      try {
+        const data = JSON.parse(e.dataTransfer.getData('application/json'));
+        const datum = cel.dataset.datum;
+        if (!kalenderData[datum]) kalenderData[datum] = [];
+        kalenderData[datum].push({
+          id: genId(),
+          type: data.type,
+          taakId: data.taakId || null,
+          thema: data.thema || null,
+          label: data.label || ''
+        });
+        slaData();
+        renderKalender();
+      } catch {}
+    });
+  });
+
+  // Verwijder knoppen
+  grid.querySelectorAll('.kal-blokje-verwijder').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const datum = btn.dataset.datum;
+      const id = btn.dataset.itemId;
+      if (!kalenderData[datum]) return;
+      kalenderData[datum] = kalenderData[datum].filter(i => i.id !== id);
+      slaData();
+      renderKalender();
+    });
+  });
+
+  // Inline bewerken van thema/standaard labels
+  grid.querySelectorAll('.kal-blokje-label[onderdeel-bewerkbaar]').forEach(span => {
+    span.style.cursor = 'text';
+    span.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      const blokje = span.closest('.kal-blokje');
+      const datum = blokje.dataset.datum;
+      const id = blokje.dataset.itemId;
+      const huidigLabel = span.textContent;
+      const input = document.createElement('input');
+      input.className = 'kal-inline-edit';
+      input.value = huidigLabel === '—' ? '' : huidigLabel;
+      span.replaceWith(input);
+      input.focus();
+      const opslaan = () => {
+        const nieuw = input.value.trim();
+        const item = (kalenderData[datum] || []).find(i => i.id === id);
+        if (item) item.label = nieuw;
+        slaData();
+        renderKalender();
+      };
+      input.addEventListener('blur', opslaan);
+      input.addEventListener('keydown', e2 => { if (e2.key === 'Enter') { e2.preventDefault(); input.blur(); } });
+    });
+  });
+}
+
+function renderKalender() {
+  if (!kalenderStartMaand) {
+    const nu = new Date();
+    kalenderStartMaand = new Date(nu.getFullYear(), nu.getMonth(), 1);
+  }
+  renderKalenderSidebar();
+  renderKalenderGrid();
+}
+
+function verschuifKalender(richting) {
+  if (!kalenderStartMaand) renderKalender();
+  kalenderStartMaand = new Date(kalenderStartMaand.getFullYear(), kalenderStartMaand.getMonth() + richting, 1);
+  renderKalenderGrid();
+}
+
+function openKalNieuwModal() {
+  document.getElementById('kal-nieuw-omschrijving').value = '';
+  document.getElementById('kal-nieuw-thema').value = 'IURC';
+  document.getElementById('kal-nieuw-grootte').value = 'L';
+  document.getElementById('kal-nieuw-ook-master').checked = false;
+  document.getElementById('kal-nieuw-modal-overlay').classList.remove('hidden');
+  document.getElementById('kal-nieuw-omschrijving').focus();
+}
+
+function sluitKalNieuwModal() {
+  document.getElementById('kal-nieuw-modal-overlay').classList.add('hidden');
+}
+
+function slaKalNieuwOp() {
+  const omschrijving = document.getElementById('kal-nieuw-omschrijving').value.trim();
+  if (!omschrijving) return;
+  const thema = document.getElementById('kal-nieuw-thema').value;
+  const grootte = document.getElementById('kal-nieuw-grootte').value;
+  const ookMaster = document.getElementById('kal-nieuw-ook-master').checked;
+
+  const nieuwId = genId();
+  if (ookMaster) {
+    taken.push({ id: nieuwId, omschrijving, thema, grootte, prio: 5, periode: 'kwartaal', type: 'werk', gereed: false, aangemaakt: Date.now() });
+  }
+  sluitKalNieuwModal();
+  slaData();
+  renderKalender();
+}
+
 // ===== HELPERS =====
 function maakOverlaySluiten(overlayEl, sluitFn) {
   let startOpOverlay = false;
@@ -1921,6 +2230,7 @@ function wisselTab(naam) {
   if (naam === 'matrix') renderMatrix();
   if (naam === 'archief') renderArchief();
   if (naam === 'stats') renderStatistieken();
+  if (naam === 'kalender') renderKalender();
 }
 
 // ===== INIT =====
@@ -2086,4 +2396,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     clearTimeout(syncTimeout);
     syncServer();
   });
+
+  // Kalender navigatie
+  document.getElementById('kal-prev').addEventListener('click', () => verschuifKalender(-1));
+  document.getElementById('kal-next').addEventListener('click', () => verschuifKalender(1));
+
+  // Kalender nieuwe actie modal
+  document.getElementById('kal-nieuw-actie-btn').addEventListener('click', openKalNieuwModal);
+  document.getElementById('kal-nieuw-sluiten').addEventListener('click', sluitKalNieuwModal);
+  document.getElementById('kal-nieuw-annuleren').addEventListener('click', sluitKalNieuwModal);
+  document.getElementById('kal-nieuw-opslaan').addEventListener('click', slaKalNieuwOp);
+  document.getElementById('kal-nieuw-omschrijving').addEventListener('keydown', e => { if (e.key === 'Enter') slaKalNieuwOp(); });
+  maakOverlaySluiten(document.getElementById('kal-nieuw-modal-overlay'), sluitKalNieuwModal);
 });
