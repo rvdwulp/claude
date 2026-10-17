@@ -1968,22 +1968,19 @@ function renderKalenderSidebar() {
 
     const acties = taken.filter(t =>
       !t.afgerond && !t.verwijderd && !t.wachten &&
-      (t.grootte === 'XL' || t.grootte === 'L' || t.grootte === 'M') &&
+      ['XL', 'L', 'M', 'K'].includes(t.grootte) &&
       (thema === 'Privé' ? t.type === 'prive' : t.thema === thema && t.type !== 'prive')
     ).sort((a, b) => {
-      const order = { XL: 0, L: 1, M: 2 };
-      const diff = (order[a.grootte] ?? 1) - (order[b.grootte] ?? 1);
+      const order = { XL: 0, L: 1, M: 2, K: 3 };
+      const diff = order[a.grootte] - order[b.grootte];
       return diff !== 0 ? diff : (a.prio||5) - (b.prio||5);
     });
 
-    const lActies = acties.filter(t => t.grootte !== 'M');
-    const mActies = acties.filter(t => t.grootte === 'M');
+    const zichtbaar = acties.filter(t => t.grootte !== 'K');
+    const kActies = acties.filter(t => t.grootte === 'K');
 
-    if (acties.length === 0 && thema !== 'Overig') {
-      // Thema zonder actieve M/L acties: toon alleen header, inklappen
-    }
-
-    html += `<div class="kal-sectie-header kal-thema-header-${thema}" data-thema="${thema}">
+    html += `<div class="kal-sectie-header kal-thema-header-${thema}" data-thema="${thema}"
+      draggable="true" title="Sleep naar de kalender om een ${thema}-blok te plaatsen">
       <span class="kal-thema-toggle">${state.open ? '▾' : '▸'}</span>
       <span>${thema}</span>
       <span class="kal-thema-count">${acties.length}</span>
@@ -1993,31 +1990,17 @@ function renderKalenderSidebar() {
 
     html += `<div class="kal-thema-body" data-thema="${thema}">`;
 
-    // Thema-blokjes
-    html += `<div class="kal-sleep-item ${kleur}" draggable="true"
-      data-type="thema" data-thema="${thema}" data-label="${thema}">
-      <span class="kal-item-label">${thema}</span>
-    </div>`;
-    html += `<div class="kal-sleep-item ${kleur} kal-leeg" draggable="true"
-      data-type="thema" data-thema="${thema}" data-label="">
-      <span class="kal-item-label">[leeg]</span>
-    </div>`;
-
-    // L-acties altijd zichtbaar
-    for (const t of lActies) {
-      const teller = kalTaakTeller(t.id);
-      html += kalSleepItemHtml(t, kleur, teller);
+    for (const t of zichtbaar) {
+      html += kalSleepItemHtml(t, kleur, kalTaakTeller(t.id));
     }
 
-    // M-acties achter toggle
-    if (mActies.length > 0) {
+    if (kActies.length > 0) {
       html += `<div class="kal-m-toggle" data-thema="${thema}">
-        ${state.toonM ? '▾' : '▸'} ${mActies.length} M-acties
+        ${state.toonM ? '▾' : '▸'} ${kActies.length} K-acties
       </div>`;
       if (state.toonM) {
-        for (const t of mActies) {
-          const teller = kalTaakTeller(t.id);
-          html += kalSleepItemHtml(t, kleur, teller);
+        for (const t of kActies) {
+          html += kalSleepItemHtml(t, kleur, kalTaakTeller(t.id));
         }
       }
     }
@@ -2047,7 +2030,17 @@ function renderKalenderSidebar() {
     });
   });
 
-  // M-acties toggle
+  // Thema-header sleepbaar als thema-blok
+  col.querySelectorAll('.kal-sectie-header[data-thema]').forEach(h => {
+    h.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('application/json', JSON.stringify({
+        type: 'thema', taakId: null, thema: h.dataset.thema, label: h.dataset.thema
+      }));
+      e.dataTransfer.effectAllowed = 'copy';
+    });
+  });
+
+  // K-acties toggle
   col.querySelectorAll('.kal-m-toggle').forEach(btn => {
     btn.addEventListener('click', () => {
       const t = btn.dataset.thema;

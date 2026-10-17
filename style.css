@@ -1852,3 +1852,6 @@ header h1 {
 .kal-thema-header-Spreker     { background: #fce7f3; color: #be185d; }
 .kal-thema-header-Overig      { background: #f1f5f9; color: #475569; }
 .kal-thema-header-Privé       { background: #f3e8ff; color: #7e22ce; }
+
+.kal-sectie-header[draggable="true"] { cursor: grab; }
+.kal-sectie-header[draggable="true"]:active { cursor: grabbing; }
