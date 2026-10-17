@@ -1898,7 +1898,7 @@ function verwerkUrlParameters() {
 const THEMAS = ['IURC', 'AI', 'Innovatie', 'DHM', 'TD', 'EU', 'Spreker', 'Overig', 'Privé'];
 
 const KAL_STANDAARDEN = [
-  'Vrije dag', 'Korte dag', 'Vrije woensdag', 'Feestdag',
+  'Vrije dag', 'Buitenlandse dienstreis', 'Korte dag', 'Vrije woensdag', 'Feestdag',
   'Congres / conferentie', 'Uitje / teamdag', 'Vergadering (groot)'
 ];
 
