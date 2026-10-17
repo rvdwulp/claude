@@ -1522,24 +1522,25 @@ header h1 {
   max-width: none !important;
   padding: 0 !important;
   margin: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box;
 }
 
 .kalender-layout {
-  display: flex;
-  gap: 0;
-  height: calc(100vh - 54px);
+  display: grid;
+  grid-template-columns: 270px 1fr;
+  height: calc(100vh - 56px);
   overflow: hidden;
+  width: 100%;
 }
 
 .kalender-sidebar {
-  width: 260px;
-  min-width: 220px;
-  max-width: 300px;
   border-right: 1px solid var(--border);
   background: var(--bg-secondary);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  height: 100%;
 }
 
 .kalender-sidebar-nav {
@@ -1616,9 +1617,11 @@ header h1 {
 }
 
 .kalender-grid-wrapper {
-  flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 10px 12px;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .kal-maand-blok {
